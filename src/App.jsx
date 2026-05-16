@@ -23,31 +23,32 @@ function optimalSailAngle(a) {
 }
 
 const LEVELS = [
-  { id:1, name:"順風衝刺",    windDir:0,   windSpeed:10, marks:[{x:400,y:80,label:"終點"}],                                                startPos:{x:400,y:620}, startHeading:0,   tip:"順風時把帆放到最開（85°）！" },
-  { id:2, name:"側風橫渡",    windDir:270, windSpeed:10, marks:[{x:720,y:350,label:"終點"}],                                               startPos:{x:80,y:350},  startHeading:90,  tip:"側風時帆角約45°最快！" },
-  { id:3, name:"迎風搶風",    windDir:0,   windSpeed:11, marks:[{x:400,y:70,label:"上風標"}],                                              startPos:{x:400,y:630}, startHeading:315, tip:"逆風走Z字形，這叫Tacking！" },
-  { id:4, name:"繞下風標",    windDir:0,   windSpeed:10, marks:[{x:400,y:600,label:"下風標"},{x:400,y:90,label:"終點"}],                  startPos:{x:400,y:90},  startHeading:180, tip:"繞標前提早收帆準備轉向！" },
-  { id:5, name:"三角繞標賽",  windDir:350, windSpeed:11, marks:[{x:400,y:80,label:"上風標"},{x:680,y:530,label:"側風標"},{x:120,y:530,label:"終點"}], startPos:{x:400,y:630}, startHeading:5, tip:"三角賽：上風搶風、側風橫渡、下風順滑！" },
+  { id:1, name:"順風衝刺",    windDir:0,   windSpeed:9, marks:[{x:400,y:80,label:"終點"}],                                                startPos:{x:400,y:620}, startHeading:0,   tip:"順風時把帆放開！" },
+  { id:2, name:"側風橫渡",    windDir:270, windSpeed:9, marks:[{x:720,y:350,label:"終點"}],                                               startPos:{x:80,y:350},  startHeading:90,  tip:"側風時帆角約45°！" },
+  { id:3, name:"迎風搶風",    windDir:0,   windSpeed:9, marks:[{x:400,y:70,label:"上風標"}],                                              startPos:{x:400,y:630}, startHeading:315, tip:"逆風走Z字形（Tacking）！" },
+  { id:4, name:"繞下風標",    windDir:0,   windSpeed:9, marks:[{x:400,y:600,label:"下風標"},{x:400,y:90,label:"終點"}],                  startPos:{x:400,y:90},  startHeading:180, tip:"繞過兩個浮標到終點！" },
+  { id:5, name:"三角繞標賽",  windDir:350, windSpeed:10, marks:[{x:400,y:80,label:"上風標"},{x:680,y:530,label:"側風標"},{x:120,y:530,label:"終點"}], startPos:{x:400,y:630}, startHeading:5, tip:"順序經過三個浮標！" },
 ];
 
 const BEAR_TIPS = {
-  noGoZone:  ["老兄！你在用頭撞風嗎？這樣船不會動啦！快轉彎！","嘿！逆風直衝是要去撞冰山喔？趕快轉個方向！","兄弟你這速度，我用走的都比你快！趕快轉！"],
-  sailTooIn: ["帆收那麼緊幹嘛？你在擠公車嗎？快放開！","帆都夾成一條線了，風跑光了你知道嗎？","阿弟仔，帆要放出來啦！不是要你打包帶走！"],
-  sailTooOut:["帆放那麼開，你是要在海上曬棉被喔？","這樣帆角風都從旁邊跑掉了啦，快收一點！","你的帆快貼到水了，再放下去就變拖網漁船了！"],
-  goodSpeed: ["讚喔！就是這個感覺！黑熊為你鼓掌！啪啪啪！","飛起來了！這帆角完美！繼續保持不要亂動！","哇這速度！你是在衝浪還是在開帆船啊？帥！"],
-  nearMark:  ["標到了！準備轉彎！不要直直衝過去喔！","快到啦！做好心理準備要轉向了！","前面那個橘色球就是目標！衝過去就贏了！"],
-  tacking:   ["換舷了！帆要跟著換邊喔！這叫做Tacking！","轉過去了！注意帆會自動換邊，別被帆打到頭！","帆換邊了吧！逆風就是要這樣Z字形前進！"],
-  finish:    ["過關了！黑熊我超級驕傲！你就是海上之王！","恭喜完成！計時停了！快看看你破了幾秒！","哇你真的做到了！要不要再試一次破自己的紀錄？"],
-  start:     ["準備好了嗎老兄？帆角抓好，黑熊發令了！出發！","開始囉！記住中間是直行、上推右轉、下拉左轉！","來吧！黑熊在旁邊盯著你！不要讓我失望喔！"],
+  noGoZone:  {voice: false, text: ["逆風要轉彎喔！","轉個方向試試。","改變方向吧！"]},
+  sailTooIn: {voice: false, text: ["帆放開一點喔！","帆角太小了。","試試放大帆角。"]},
+  sailTooOut:{voice: false, text: ["帆收一點吧！","帆角太大了。","試試收一下帆。"]},
+  goodSpeed: {voice: true,  text: ["很棒！保持住！","做得好！"]},
+  slowSpeed: {voice: true,  text: ["加快速度吧！","速度太慢了。"]},
+  nearMark:  {voice: false, text: ["快到浮標了！","準備轉向！","接近目標！"]},
+  tacking:   {voice: false, text: ["換舷了！","帆跟著換邊。","Z字形前進！"]},
+  finish:    {voice: true,  text: ["恭喜過關！","你做到了！","太棒了！"]},
+  start:     {voice: true,  text: ["準備好？出發！","開始囉！","讓我們開始吧！"]},
 };
-function getBearTip(cat) { const a=BEAR_TIPS[cat]; return a[Math.floor(Math.random()*a.length)]; }
+function getBearTip(cat) { const tips=BEAR_TIPS[cat]; return {voice:tips.voice, text:tips.text[Math.floor(Math.random()*tips.text.length)]}; }
 
 let voicesLoaded = false;
-function speakBear(text) {
-  if (!("speechSynthesis" in window)) return;
+function speakBear(text, shouldSpeak) {
+  if (!shouldSpeak || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang="zh-TW"; utt.rate=0.92; utt.pitch=0.75; utt.volume=1;
+  utt.lang="zh-TW"; utt.rate=0.7; utt.pitch=0.75; utt.volume=1;
   const tryVoice = () => {
     const voices = window.speechSynthesis.getVoices();
     const prefer = ["Tong","Daniel","Liang","Ming","Yu","Kun","Zhiwei","Yunxi"];
@@ -463,10 +464,10 @@ export default function OPSailboatGame() {
     if(!coachOnRef.current) return;
     if(lastBearCatRef.current===cat) return;
     lastBearCatRef.current=cat;
-    const msg=getBearTip(cat);
-    setBearMsg(msg); setBearVisible(true); speakBear(msg);
+    const tip=getBearTip(cat);
+    setBearMsg(tip.text); setBearVisible(true); speakBear(tip.text, tip.voice);
     if(bearTimerRef.current) clearTimeout(bearTimerRef.current);
-    bearTimerRef.current=setTimeout(()=>{ setBearVisible(false); lastBearCatRef.current=""; },5500);
+    bearTimerRef.current=setTimeout(()=>{ setBearVisible(false); lastBearCatRef.current=""; },4000);
   },[]);
 
   const startLevel = useCallback(idx=>{
@@ -506,7 +507,7 @@ export default function OPSailboatGame() {
       const optSail=optimalSailAngle(Math.abs(g.angleDiff));
       const sailEff=Math.max(0,1-Math.abs(g.sailAngle-optSail)/55);
       const targetSpeed=polarSpeed(g.angleDiff)*sailEff*lv.windSpeed*0.22;
-      g.speed+=(targetSpeed-g.speed)*dt*2.0;
+      g.speed+=(targetSpeed-g.speed)*dt*1.2;
 
       // angleDiff>0: wind from port(left) → boom goes starboard(+1 CW); <0: wind from starboard → boom goes port(-1 CCW)
       const windSide = g.angleDiff >= 0 ? 1 : -1;
@@ -535,11 +536,12 @@ export default function OPSailboatGame() {
       }
 
       // coach
-      if(Math.abs(g.angleDiff)<40&&g.speed<0.25) showBear("noGoZone");
-      else if(g.sailAngle<optSail-28&&g.speed>0.15) showBear("sailTooIn");
-      else if(g.sailAngle>Math.min(optSail+28,100)&&g.speed>0.15) showBear("sailTooOut");
-      else if(g.speed>targetSpeed*0.88&&targetSpeed>0.4) showBear("goodSpeed");
-      if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)<90) showBear("nearMark");
+      if(Math.abs(g.angleDiff)<40&&g.speed<0.2) showBear("noGoZone");
+      else if(g.sailAngle<optSail-30&&g.speed>0.15&&Math.abs(g.angleDiff)>35) showBear("sailTooIn");
+      else if(g.sailAngle>Math.min(optSail+30,100)&&g.speed>0.15&&Math.abs(g.angleDiff)>35) showBear("sailTooOut");
+      else if(g.speed>targetSpeed*0.85&&targetSpeed>0.5) showBear("goodSpeed");
+      else if(targetSpeed>0.3&&g.speed<targetSpeed*0.4&&g.elapsed>3) showBear("slowSpeed");
+      if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)<80) showBear("nearMark");
 
       const ratio=Math.min(g.speed/MAX_SPEED,1);
       setElapsed(g.elapsed); setSailAngleDisplay(Math.round(g.sailAngle));
