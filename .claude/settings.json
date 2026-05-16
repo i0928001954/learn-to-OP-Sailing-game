@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/learn-to-OP-Sailing-game && git push 2>&1 || true",
+            "statusMessage": "推送到 GitHub..."
+          }
+        ]
+      }
+    ]
+  }
+}
