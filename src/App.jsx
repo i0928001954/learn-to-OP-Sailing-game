@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 const CANVAS_W = 800;
 const CANVAS_H = 700;
-const BOAT_SIZE = 22;
-const MARK_RADIUS = 28;
-const VERSION = "v1.2";
+const BOAT_SIZE = 30;
+const MARK_RADIUS = 35;
+const VERSION = "v1.3";
 const LAST_UPDATED = "2026-05-16";
 const MAX_SPEED = 3.0; // knots display max
 
@@ -30,6 +30,9 @@ const LEVELS = [
   { id:3, name:"迎風搶風",    windDir:0,   windSpeed:9, marks:[{x:400,y:70,label:"上風標"}],                                              startPos:{x:400,y:630}, startHeading:315, tip:"逆風走Z字形（Tacking）！" },
   { id:4, name:"繞下風標",    windDir:0,   windSpeed:9, marks:[{x:400,y:600,label:"下風標"},{x:400,y:90,label:"終點"}],                  startPos:{x:400,y:90},  startHeading:180, tip:"繞過兩個浮標到終點！" },
   { id:5, name:"三角繞標賽",  windDir:350, windSpeed:10, marks:[{x:400,y:80,label:"上風標"},{x:680,y:530,label:"側風標"},{x:120,y:530,label:"終點"}], startPos:{x:400,y:630}, startHeading:5, tip:"順序經過三個浮標！" },
+  { id:6, name:"側風蛇行",   windDir:270, windSpeed:11, marks:[{x:680,y:100,label:"標1"},{x:680,y:580,label:"標2"},{x:400,y:350,label:"終點"}], startPos:{x:80,y:350}, startHeading:0, tip:"帆角45度，側風衝刺！" },
+  { id:7, name:"逆風競技",   windDir:5,   windSpeed:11, marks:[{x:150,y:350,label:"標A"},{x:650,y:200,label:"標B"},{x:350,y:80,label:"終點"}], startPos:{x:400,y:630}, startHeading:310, tip:"逆風換舷連環技！" },
+  { id:8, name:"全能挑戰",   windDir:0,   windSpeed:12, marks:[{x:150,y:580,label:"左標"},{x:650,y:580,label:"右標"},{x:400,y:80,label:"終點"}], startPos:{x:400,y:350}, startHeading:180, tip:"逆風、側風、順風全都要！" },
 ];
 
 const BEAR_TIPS = {
@@ -84,6 +87,46 @@ function speakBear(cat, idx, text, shouldSpeak) {
   _bearAudio = audio;
   audio.onerror = useTTS;
   audio.play().catch(useTTS);
+}
+
+// ─── Background music (Web Audio API, no external files needed) ──
+let _bgCtx = null, _bgScheduleId = null;
+
+function stopBgMusic() {
+  if (_bgScheduleId) { clearTimeout(_bgScheduleId); _bgScheduleId = null; }
+  if (_bgCtx) { _bgCtx.close().catch(()=>{}); _bgCtx = null; }
+}
+
+function startBgMusic() {
+  if (_bgCtx) return;
+  try {
+    _bgCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ac = _bgCtx;
+    const master = ac.createGain(); master.gain.value = 0.12;
+    master.connect(ac.destination);
+    // Bass drone: C2, G2, C3
+    [[65.4,0.5],[98.0,0.22],[130.8,0.15]].forEach(([freq,vol])=>{
+      const o=ac.createOscillator(),g=ac.createGain(),f=ac.createBiquadFilter();
+      o.type='sine'; o.frequency.value=freq; g.gain.value=vol;
+      f.type='lowpass'; f.frequency.value=420;
+      o.connect(f); f.connect(g); g.connect(master); o.start();
+    });
+    // Melody: C major pentatonic, cheerful sailing theme (16 notes, looping)
+    const notes=[523.25,659.25,783.99,659.25,523.25,659.25,783.99,880.00,
+                 783.99,659.25,523.25,392.00,523.25,659.25,523.25,392.00];
+    const BEAT=0.45; let idx=0;
+    function tick(){
+      if(!_bgCtx) return;
+      const now=ac.currentTime;
+      const o=ac.createOscillator(),g=ac.createGain();
+      o.type='triangle'; o.frequency.value=notes[idx%notes.length];
+      g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(0.13,now+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,now+BEAT*0.85);
+      o.connect(g); g.connect(master); o.start(now); o.stop(now+BEAT);
+      idx++; _bgScheduleId=setTimeout(tick,BEAT*1000);
+    }
+    tick();
+  } catch(e){ _bgCtx=null; }
 }
 
 // ─── speed zone config ───────────────────────────────────────────
@@ -483,6 +526,13 @@ export default function OPSailboatGame() {
   const headUpRef = useRef(false);
   useEffect(()=>{ headUpRef.current=headUp; },[headUp]);
 
+  const [musicOn, setMusicOn] = useState(true);
+  useEffect(()=>{
+    if(gameState==="playing" && musicOn) startBgMusic();
+    else stopBgMusic();
+    return stopBgMusic;
+  },[gameState, musicOn]);
+
   const bearTimerRef=useRef(null), animRef=useRef(null), lastBearCatRef=useRef("");
   const coachOnRef=useRef(coachOn);
   useEffect(()=>{ coachOnRef.current=coachOn; },[coachOn]);
@@ -571,7 +621,7 @@ export default function OPSailboatGame() {
       else if(g.sailAngle>Math.min(optSail+30,100)&&g.speed>0.15&&Math.abs(g.angleDiff)>35) showBear("sailTooOut");
       else if(g.speed>targetSpeed*0.85&&targetSpeed>0.5) showBear("goodSpeed");
       else if(targetSpeed>0.3&&g.speed<targetSpeed*0.4&&g.elapsed>3) showBear("slowSpeed");
-      if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)<80) showBear("nearMark");
+      if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)<110) showBear("nearMark");
 
       const ratio=Math.min(g.speed/MAX_SPEED,1);
       setElapsed(g.elapsed); setSailAngleDisplay(Math.round(g.sailAngle));
@@ -704,7 +754,7 @@ export default function OPSailboatGame() {
             style={{background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:12,padding:"12px 8px",cursor:"pointer",color:"#fff",transition:"all 0.18s",textAlign:"center"}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}
             onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.09)"}>
-            <div style={{fontSize:20,marginBottom:4}}>{["🌊","💨","⬆️","🔄","🏁"][i]}</div>
+            <div style={{fontSize:20,marginBottom:4}}>{["🌊","💨","⬆️","🔄","🏁","🌀","⚡","🎯"][i]}</div>
             <div style={{fontWeight:700,fontSize:12,marginBottom:2}}>關卡 {lv.id}</div>
             <div style={{fontSize:11,color:"#7ed6ff",marginBottom:4}}>{lv.name}</div>
             {rec&&<div style={{fontSize:10,color:"#fbbf24"}}>🏆 {fmtTime(rec)}</div>}
@@ -760,6 +810,7 @@ export default function OPSailboatGame() {
           ))}
         </div>
         <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setMusicOn(p=>!p)} style={{background:musicOn?"rgba(250,204,21,0.25)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>{musicOn?"🎵":"🔇"}</button>
           <button onClick={()=>setHeadUp(p=>!p)} style={{background:headUp?"rgba(96,200,255,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}} title="切換視角">
             {headUp?"⬆️ 船首":"🗺 北方"}
           </button>
