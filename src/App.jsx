@@ -509,7 +509,8 @@ export default function OPSailboatGame() {
       const optSail=optimalSailAngle(Math.abs(g.angleDiff));
       const sailEff=Math.max(0,1-Math.abs(g.sailAngle-optSail)/72);
       const targetSpeed=polarSpeed(g.angleDiff)*sailEff*lv.windSpeed*0.22;
-      g.speed+=(targetSpeed-g.speed)*dt*1.6;
+      const accel = targetSpeed > g.speed ? 1.6 : 0.42;
+      g.speed+=(targetSpeed-g.speed)*dt*accel;
 
       // angleDiff>0: wind from port(left) → boom goes starboard(+1 CW); <0: wind from starboard → boom goes port(-1 CCW)
       const windSide = g.angleDiff >= 0 ? 1 : -1;
