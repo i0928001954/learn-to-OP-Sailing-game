@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.3";
+const VERSION = "v1.4";
 const LAST_UPDATED = "2026-05-16";
 const MAX_SPEED = 3.0; // knots display max
 
@@ -89,6 +89,14 @@ function speakBear(cat, idx, text, shouldSpeak) {
   audio.play().catch(useTTS);
 }
 
+// Call once from a user-gesture handler to unlock speechSynthesis (iOS/Safari)
+function unlockAudio() {
+  if ("speechSynthesis" in window) {
+    const u = new SpeechSynthesisUtterance(""); u.volume = 0;
+    window.speechSynthesis.speak(u);
+  }
+}
+
 // ─── Background music (Web Audio API, no external files needed) ──
 let _bgCtx = null, _bgScheduleId = null;
 
@@ -101,6 +109,7 @@ function startBgMusic() {
   if (_bgCtx) return;
   try {
     _bgCtx = new (window.AudioContext || window.webkitAudioContext)();
+    _bgCtx.resume().catch(()=>{});
     const ac = _bgCtx;
     const master = ac.createGain(); master.gain.value = 0.12;
     master.connect(ac.destination);
@@ -522,8 +531,8 @@ export default function OPSailboatGame() {
   const [speedRatio, setSpeedRatio] = useState(0); // for CSS overlay effects
   const [records, setRecords] = useState(()=>{ try{return JSON.parse(localStorage.getItem("op_records3")||"{}")}catch{return{}} });
 
-  const [headUp, setHeadUp] = useState(false);
-  const headUpRef = useRef(false);
+  const [headUp, setHeadUp] = useState(true);
+  const headUpRef = useRef(true);
   useEffect(()=>{ headUpRef.current=headUp; },[headUp]);
 
   const [musicOn, setMusicOn] = useState(true);
@@ -550,6 +559,7 @@ export default function OPSailboatGame() {
   },[]);
 
   const startLevel = useCallback(idx=>{
+    unlockAudio();
     const lv=LEVELS[idx]; const g=gameRef.current;
     Object.assign(g,{x:lv.startPos.x,y:lv.startPos.y,heading:lv.startHeading,speed:0,sailAngle:45,angleDiff:0,currentMark:0,startTime:null,elapsed:0,finished:false,t:0,trail:[]});
     rudderRef.current=0;
@@ -810,7 +820,7 @@ export default function OPSailboatGame() {
           ))}
         </div>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>setMusicOn(p=>!p)} style={{background:musicOn?"rgba(250,204,21,0.25)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>{musicOn?"🎵":"🔇"}</button>
+          <button onClick={()=>{ const next=!musicOn; setMusicOn(next); if(next){ unlockAudio(); startBgMusic(); } else stopBgMusic(); }} style={{background:musicOn?"rgba(250,204,21,0.25)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>{musicOn?"🎵":"🔇"}</button>
           <button onClick={()=>setHeadUp(p=>!p)} style={{background:headUp?"rgba(96,200,255,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}} title="切換視角">
             {headUp?"⬆️ 船首":"🗺 北方"}
           </button>
