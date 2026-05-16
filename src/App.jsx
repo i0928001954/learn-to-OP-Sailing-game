@@ -33,15 +33,15 @@ const LEVELS = [
 ];
 
 const BEAR_TIPS = {
-  noGoZone:  {voice: false, text: ["這方向頂風，船在罷工啦！快轉！","嗯哼，進死角了！換個角度！","頂風衝？勇氣可嘉但船不動喔！"]},
-  sailTooIn: {voice: false, text: ["帆繃那麼緊幹嘛，讓風進來啊！","帆角太小，風都憋死了！放開！","帆縮那麼緊，船飛不起來啦！"]},
-  sailTooOut:{voice: false, text: ["帆放那麼開，是在晾衣服嗎？","帆都快飛走了！快收一點！","帆角太大，風都跑光了！收！"]},
-  goodSpeed: {voice: true,  text: ["就這樣！年輕人有希望！","速度到位！老師我感動了！"]},
-  slowSpeed: {voice: true,  text: ["這速度，龜都比你快啦！","動起來！老師我看了很著急！"]},
-  nearMark:  {voice: false, text: ["那個浮標！繞過去！","快到了！眼睛放亮！","目標在眼前，漂亮繞過去！"]},
-  tacking:   {voice: false, text: ["換舷！帆跟著換邊！","Z字形走法，這才是帆船精髓！","漂亮轉彎！帆調好！"]},
-  finish:    {voice: true,  text: ["開得好！教練請你吃鬆餅！"]},
-  start:     {voice: true,  text: ["出發！讓風看看你多厲害！","預備——衝！帥氣的！","年輕人，展示你的本事！走！"]},
+  noGoZone:  {voice: true, text: ["這方向頂風，船在罷工啦！快轉！","嗯哼，進死角了！換個角度！","頂風衝？勇氣可嘉但船不動喔！"]},
+  sailTooIn: {voice: true, text: ["帆繃那麼緊幹嘛，讓風進來啊！","帆角太小，風都憋死了！放開！","帆縮那麼緊，船飛不起來啦！"]},
+  sailTooOut:{voice: true, text: ["帆放那麼開，是在晾衣服嗎？","帆都快飛走了！快收一點！","帆角太大，風都跑光了！收！"]},
+  goodSpeed: {voice: true, text: ["就這樣！年輕人有希望！","速度到位！老師我感動了！"]},
+  slowSpeed: {voice: true, text: ["這速度，龜都比你快啦！","動起來！老師我看了很著急！"]},
+  nearMark:  {voice: true, text: ["那個浮標！繞過去！","快到了！眼睛放亮！","目標在眼前，漂亮繞過去！"]},
+  tacking:   {voice: true, text: ["換舷！帆跟著換邊！","Z字形走法，這才是帆船精髓！","漂亮轉彎！帆調好！"]},
+  finish:    {voice: true, text: ["開得好！教練請你吃鬆餅！"]},
+  start:     {voice: true, text: ["出發！讓風看看你多厲害！","預備——衝！帥氣的！","年輕人，展示你的本事！走！"]},
 };
 function getBearTip(cat) {
   const tips=BEAR_TIPS[cat];
@@ -57,12 +57,11 @@ let voicesLoaded = false;
 function speakBear(cat, idx, text, shouldSpeak) {
   if (!shouldSpeak) return;
   _stopBearAudio();
-  // Try pre-recorded MP3 first (public/audio/<cat>_<idx>.mp3)
-  const audio = new Audio(`/audio/${cat}_${idx}.mp3`);
-  audio.volume = 1;
-  _bearAudio = audio;
-  audio.play().catch(() => {
-    // Fallback: browser speechSynthesis
+
+  // TTS fallback — only fires once even if both onerror and catch trigger
+  let ttsUsed = false;
+  function useTTS() {
+    if (ttsUsed) return; ttsUsed = true;
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
@@ -77,7 +76,14 @@ function speakBear(cat, idx, text, shouldSpeak) {
     };
     if (!voicesLoaded) { window.speechSynthesis.onvoiceschanged=()=>{voicesLoaded=true;tryVoice();}; tryVoice(); }
     else tryVoice();
-  });
+  }
+
+  // Try pre-recorded MP3 first; fall back to TTS on any failure
+  const audio = new Audio(`/audio/${cat}_${idx}.mp3`);
+  audio.volume = 1;
+  _bearAudio = audio;
+  audio.onerror = useTTS;
+  audio.play().catch(useTTS);
 }
 
 // ─── speed zone config ───────────────────────────────────────────
@@ -538,7 +544,7 @@ export default function OPSailboatGame() {
       if(prevWindSide!==0&&windSide!==prevWindSide) showBear("tacking");
       prevWindSide=windSide;
 
-      const turnRate=rudderRef.current*(g.speed*36+5);
+      const turnRate=rudderRef.current*(g.speed*36+18);
       g.heading=(g.heading+turnRate*dt+360)%360;
       const rad=g.heading*Math.PI/180;
       g.x=Math.max(15,Math.min(CANVAS_W-15,g.x+Math.sin(rad)*g.speed*dt*60));
@@ -609,6 +615,39 @@ export default function OPSailboatGame() {
 
       // Head-up mode: boat always at canvas centre, always facing up
       if (isHeadUp) drawBoat(ctx,CANVAS_W/2,CANVAS_H/2,0,g.sailAngle,windSide,ratio);
+
+      // ── Head-up target arrow (canvas space, drawn after world transform removed) ──
+      if (isHeadUp && mark) {
+        const dx = mark.x - g.x;
+        const dy = mark.y - g.y;
+        const h = g.heading * Math.PI / 180;
+        // Rotate world vector by -heading to get screen-relative direction
+        const sx =  dx * Math.cos(h) + dy * Math.sin(h);
+        const sy = -dx * Math.sin(h) + dy * Math.cos(h);
+        const dist = Math.hypot(sx, sy);
+        if (dist > 5) {
+          const nx = sx / dist, ny = sy / dist;
+          const pulse = 0.65 + 0.35 * Math.sin(g.t * 0.12); // gentle pulse
+          const R = 52; // ring radius around boat
+          const ax = CANVAS_W/2 + nx * R, ay = CANVAS_H/2 + ny * R;
+          const angle = Math.atan2(nx, -ny);
+          ctx.save();
+          ctx.globalAlpha = pulse;
+          ctx.translate(ax, ay);
+          ctx.rotate(angle);
+          // Arrowhead
+          ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(8,6); ctx.lineTo(-8,6); ctx.closePath();
+          ctx.fillStyle = "#facc15";
+          ctx.shadowColor = "#facc15"; ctx.shadowBlur = 12;
+          ctx.fill();
+          // Distance label
+          ctx.shadowBlur = 0; ctx.rotate(-angle);
+          ctx.fillStyle = "#fff"; ctx.font = "bold 9px sans-serif";
+          ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(Math.round(dist) + "m", 0, 20);
+          ctx.restore();
+        }
+      }
 
       // ── Speedometer — top left ──
       drawSpeedometer(ctx, g.speed, g.t);
