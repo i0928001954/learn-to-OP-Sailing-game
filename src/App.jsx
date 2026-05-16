@@ -40,7 +40,7 @@ const BEAR_TIPS = {
   slowSpeed: {voice: true,  text: ["這速度，龜都比你快啦！","動起來！老師我看了很著急！"]},
   nearMark:  {voice: false, text: ["那個浮標！繞過去！","快到了！眼睛放亮！","目標在眼前，漂亮繞過去！"]},
   tacking:   {voice: false, text: ["換舷！帆跟著換邊！","Z字形走法，這才是帆船精髓！","漂亮轉彎！帆調好！"]},
-  finish:    {voice: true,  text: ["過關！老師我臉上有光！","你做到了！我沒白教你！","完美！老師請你喝汽水！"]},
+  finish:    {voice: true,  text: ["開得好！教練請你吃鬆餅！"]},
   start:     {voice: true,  text: ["出發！讓風看看你多厲害！","預備——衝！帥氣的！","年輕人，展示你的本事！走！"]},
 };
 function getBearTip(cat) {
