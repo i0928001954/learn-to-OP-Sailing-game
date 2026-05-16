@@ -3,7 +3,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 22;
-const MARK_RADIUS = 20;
+const MARK_RADIUS = 28;
+const VERSION = "v1.1";
+const LAST_UPDATED = "2026-05-16";
 const MAX_SPEED = 3.0; // knots display max
 
 function polarSpeed(a) {
@@ -505,16 +507,16 @@ export default function OPSailboatGame() {
       const windFrom=(lv.windDir+180)%360;
       g.angleDiff=((g.heading-windFrom+540)%360)-180;
       const optSail=optimalSailAngle(Math.abs(g.angleDiff));
-      const sailEff=Math.max(0,1-Math.abs(g.sailAngle-optSail)/55);
+      const sailEff=Math.max(0,1-Math.abs(g.sailAngle-optSail)/72);
       const targetSpeed=polarSpeed(g.angleDiff)*sailEff*lv.windSpeed*0.22;
-      g.speed+=(targetSpeed-g.speed)*dt*1.2;
+      g.speed+=(targetSpeed-g.speed)*dt*1.6;
 
       // angleDiff>0: wind from port(left) → boom goes starboard(+1 CW); <0: wind from starboard → boom goes port(-1 CCW)
       const windSide = g.angleDiff >= 0 ? 1 : -1;
       if(prevWindSide!==0&&windSide!==prevWindSide) showBear("tacking");
       prevWindSide=windSide;
 
-      const turnRate=rudderRef.current*Math.max(g.speed,0.28)*28;
+      const turnRate=rudderRef.current*Math.max(g.speed,0.42)*28;
       g.heading=(g.heading+turnRate*dt+360)%360;
       const rad=g.heading*Math.PI/180;
       g.x=Math.max(15,Math.min(CANVAS_W-15,g.x+Math.sin(rad)*g.speed*dt*60));
@@ -607,7 +609,8 @@ export default function OPSailboatGame() {
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#051e34 0%,#0a4a72 55%,#0b6daa 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Noto Sans TC','PingFang TC',sans-serif",color:"#fff",padding:"20px",userSelect:"none"}}>
       <div style={{fontSize:58}}>⛵</div>
       <h1 style={{fontSize:"clamp(20px,5vw,34px)",fontWeight:900,letterSpacing:2,margin:"6px 0 4px",background:"linear-gradient(90deg,#fff,#7ed6ff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>OP 小帆船學習遊戲</h1>
-      <p style={{color:"#7ed6ff",fontSize:13,margin:"0 0 16px"}}>掌握風帆，成為海上飛人！</p>
+      <p style={{color:"#7ed6ff",fontSize:13,margin:"0 0 6px"}}>掌握風帆，成為海上飛人！</p>
+      <p style={{color:"rgba(126,214,255,0.5)",fontSize:10,margin:"0 0 16px",letterSpacing:1}}>{VERSION} · 更新：{LAST_UPDATED}</p>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
         <span style={{fontSize:22}}>🐻</span><span style={{fontSize:13}}>黑熊教練語音</span>
         <button onClick={()=>setCoachOn(p=>!p)} style={{width:46,height:24,borderRadius:12,border:"none",cursor:"pointer",background:coachOn?"#22c55e":"#555",transition:"background 0.2s",position:"relative"}}>
@@ -648,7 +651,7 @@ export default function OPSailboatGame() {
         <div style={{fontSize:42,fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{fmtTime(elapsed)}</div>
         {rec&&rec>=elapsed?<div style={{fontSize:13,color:"#22c55e",marginTop:4}}>⭐ 新紀錄！</div>:rec&&<div style={{fontSize:11,color:"#fbbf24",marginTop:4}}>🏆 最佳：{fmtTime(rec)}</div>}
       </div>
-      <div style={{fontSize:15,marginBottom:20,color:"#e2f4ff",maxWidth:300,textAlign:"center"}}>🐻 「{getBearTip("finish")}」</div>
+      <div style={{fontSize:15,marginBottom:20,color:"#e2f4ff",maxWidth:300,textAlign:"center"}}>🐻 「{getBearTip("finish").text}」</div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
         <button onClick={()=>startLevel(levelIdx)} style={{background:"#f97316",border:"none",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>🔄 再玩一次</button>
         {levelIdx<LEVELS.length-1&&<button onClick={()=>{const n=levelIdx+1;setLevelIdx(n);startLevel(n);}} style={{background:"#22c55e",border:"none",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>下一關 ➜</button>}
