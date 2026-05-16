@@ -33,15 +33,15 @@ const LEVELS = [
 ];
 
 const BEAR_TIPS = {
-  noGoZone:  {voice: false, text: ["逆風要轉彎喔！","轉個方向試試。","改變方向吧！"]},
-  sailTooIn: {voice: false, text: ["帆放開一點喔！","帆角太小了。","試試放大帆角。"]},
-  sailTooOut:{voice: false, text: ["帆收一點吧！","帆角太大了。","試試收一下帆。"]},
-  goodSpeed: {voice: true,  text: ["很棒！保持住！","做得好！"]},
-  slowSpeed: {voice: true,  text: ["加快速度吧！","速度太慢了。"]},
-  nearMark:  {voice: false, text: ["快到浮標了！","準備轉向！","接近目標！"]},
-  tacking:   {voice: false, text: ["換舷了！","帆跟著換邊。","Z字形前進！"]},
-  finish:    {voice: true,  text: ["恭喜過關！","你做到了！","太棒了！"]},
-  start:     {voice: true,  text: ["準備好？出發！","開始囉！","讓我們開始吧！"]},
+  noGoZone:  {voice: false, text: ["這方向頂風，船在罷工啦！快轉！","嗯哼，進死角了！換個角度！","頂風衝？勇氣可嘉但船不動喔！"]},
+  sailTooIn: {voice: false, text: ["帆繃那麼緊幹嘛，讓風進來啊！","帆角太小，風都憋死了！放開！","帆縮那麼緊，船飛不起來啦！"]},
+  sailTooOut:{voice: false, text: ["帆放那麼開，是在晾衣服嗎？","帆都快飛走了！快收一點！","帆角太大，風都跑光了！收！"]},
+  goodSpeed: {voice: true,  text: ["就這樣！年輕人有希望！","速度到位！老師我感動了！"]},
+  slowSpeed: {voice: true,  text: ["這速度，龜都比你快啦！","動起來！老師我看了很著急！"]},
+  nearMark:  {voice: false, text: ["那個浮標！繞過去！","快到了！眼睛放亮！","目標在眼前，漂亮繞過去！"]},
+  tacking:   {voice: false, text: ["換舷！帆跟著換邊！","Z字形走法，這才是帆船精髓！","漂亮轉彎！帆調好！"]},
+  finish:    {voice: true,  text: ["過關！老師我臉上有光！","你做到了！我沒白教你！","完美！老師請你喝汽水！"]},
+  start:     {voice: true,  text: ["出發！讓風看看你多厲害！","預備——衝！帥氣的！","年輕人，展示你的本事！走！"]},
 };
 function getBearTip(cat) { const tips=BEAR_TIPS[cat]; return {voice:tips.voice, text:tips.text[Math.floor(Math.random()*tips.text.length)]}; }
 
@@ -50,10 +50,11 @@ function speakBear(text, shouldSpeak) {
   if (!shouldSpeak || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang="zh-TW"; utt.rate=0.7; utt.pitch=0.75; utt.volume=1;
+  utt.lang="zh-TW"; utt.rate=0.9; utt.pitch=0.65; utt.volume=1;
   const tryVoice = () => {
     const voices = window.speechSynthesis.getVoices();
-    const prefer = ["Tong","Daniel","Liang","Ming","Yu","Kun","Zhiwei","Yunxi"];
+    // prefer deep male zh voices: Zhiwei(Win), Yu-shu/Yunjian/Yunfeng(Azure), Tong/Liang/Ming/Kun(others)
+    const prefer = ["Zhiwei","Yunjian","Yunfeng","Yu-shu","Tong","Liang","Ming","Kun","Yu","Daniel"];
     const maleZh = voices.find(v=>(v.lang.startsWith("zh")||v.lang.startsWith("cmn"))&&prefer.some(n=>v.name.includes(n)));
     const anyZh  = voices.find(v=> v.lang.startsWith("zh")||v.lang.startsWith("cmn"));
     if (maleZh) utt.voice=maleZh; else if (anyZh) utt.voice=anyZh;
