@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 22;
 const MARK_RADIUS = 28;
-const VERSION = "v1.1";
+const VERSION = "v1.2";
 const LAST_UPDATED = "2026-05-16";
 const MAX_SPEED = 3.0; // knots display max
 
@@ -473,6 +473,10 @@ export default function OPSailboatGame() {
   const [speedRatio, setSpeedRatio] = useState(0); // for CSS overlay effects
   const [records, setRecords] = useState(()=>{ try{return JSON.parse(localStorage.getItem("op_records3")||"{}")}catch{return{}} });
 
+  const [headUp, setHeadUp] = useState(false);
+  const headUpRef = useRef(false);
+  useEffect(()=>{ headUpRef.current=headUp; },[headUp]);
+
   const bearTimerRef=useRef(null), animRef=useRef(null), lastBearCatRef=useRef("");
   const coachOnRef=useRef(coachOn);
   useEffect(()=>{ coachOnRef.current=coachOn; },[coachOn]);
@@ -534,7 +538,7 @@ export default function OPSailboatGame() {
       if(prevWindSide!==0&&windSide!==prevWindSide) showBear("tacking");
       prevWindSide=windSide;
 
-      const turnRate=rudderRef.current*Math.max(g.speed,0.55)*36;
+      const turnRate=rudderRef.current*(g.speed*36+5);
       g.heading=(g.heading+turnRate*dt+360)%360;
       const rad=g.heading*Math.PI/180;
       g.x=Math.max(15,Math.min(CANVAS_W-15,g.x+Math.sin(rad)*g.speed*dt*60));
@@ -568,34 +572,53 @@ export default function OPSailboatGame() {
       setSpeedDisplay(+(g.speed*10).toFixed(1)); setSpeedRatio(ratio);
 
       // ── Draw ──
+      const isHeadUp = headUpRef.current;
+
+      // Ocean — always full canvas, drawn before any world transform
       drawOcean(ctx, g.t, g.speed);
+
+      // Apply head-up world transform: boat fixed at canvas centre, world rotates
+      if (isHeadUp) {
+        ctx.save();
+        ctx.translate(CANVAS_W/2, CANVAS_H/2);
+        ctx.rotate(-g.heading * Math.PI/180);
+        ctx.translate(-g.x, -g.y);
+      }
+
       drawWindArrows(ctx, lv.windDir);
 
-      // Trail
-      ctx.save();
+      // Trail (world coords — correct under both transforms)
       for(let i=0;i<g.trail.length-1;i++){
         ctx.strokeStyle=`rgba(255,255,255,${(1-i/g.trail.length)*0.18})`;
         ctx.lineWidth=2; ctx.beginPath();
         ctx.moveTo(g.trail[i].x,g.trail[i].y); ctx.lineTo(g.trail[i+1].x,g.trail[i+1].y); ctx.stroke();
       }
-      ctx.restore();
 
-      // Speed FX
+      // Speed FX (world coords)
       emitParticles(g.x, g.y, g.heading, g.speed, g.t);
       updateParticles(ctx);
       drawSpeedStreaks(ctx, g.x, g.y, g.heading, g.speed, g.t);
 
       lv.marks.forEach((mk,i)=>drawMark(ctx,mk,i<g.currentMark,i===g.currentMark));
-      drawBoat(ctx,g.x,g.y,g.heading,g.sailAngle,windSide,ratio);
+
+      // Normal mode: boat at world position with actual heading
+      if (!isHeadUp) drawBoat(ctx,g.x,g.y,g.heading,g.sailAngle,windSide,ratio);
+
+      // End world transform
+      if (isHeadUp) ctx.restore();
+
+      // Head-up mode: boat always at canvas centre, always facing up
+      if (isHeadUp) drawBoat(ctx,CANVAS_W/2,CANVAS_H/2,0,g.sailAngle,windSide,ratio);
 
       // ── Speedometer — top left ──
       drawSpeedometer(ctx, g.speed, g.t);
 
-      // Wind compass — top right
+      // Wind compass — top right (relative to boat heading in head-up mode)
+      const compassDir = isHeadUp ? (lv.windDir - g.heading + 360) % 360 : lv.windDir;
       ctx.save(); ctx.translate(CANVAS_W-48,48);
       ctx.beginPath(); ctx.arc(0,0,32,0,Math.PI*2); ctx.fillStyle="rgba(0,0,0,0.42)"; ctx.fill();
       ctx.strokeStyle="rgba(255,255,255,0.18)"; ctx.lineWidth=1; ctx.stroke();
-      ctx.rotate(lv.windDir*Math.PI/180);
+      ctx.rotate(compassDir*Math.PI/180);
       ctx.strokeStyle="#60c8ff"; ctx.lineWidth=2.5;
       ctx.beginPath(); ctx.moveTo(0,18); ctx.lineTo(0,-18); ctx.moveTo(0,-18); ctx.lineTo(-5,-8); ctx.moveTo(0,-18); ctx.lineTo(5,-8);
       ctx.stroke(); ctx.restore();
@@ -697,7 +720,12 @@ export default function OPSailboatGame() {
             </div>
           ))}
         </div>
-        <button onClick={()=>setCoachOn(p=>!p)} style={{background:coachOn?"rgba(34,197,94,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>🐻 {coachOn?"ON":"OFF"}</button>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setHeadUp(p=>!p)} style={{background:headUp?"rgba(96,200,255,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}} title="切換視角">
+            {headUp?"⬆️ 船首":"🗺 北方"}
+          </button>
+          <button onClick={()=>setCoachOn(p=>!p)} style={{background:coachOn?"rgba(34,197,94,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>🐻 {coachOn?"ON":"OFF"}</button>
+        </div>
       </div>
 
       {/* Level strip */}
