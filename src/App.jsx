@@ -36,15 +36,15 @@ const LEVELS = [
 ];
 
 const BEAR_TIPS = {
-  noGoZone:  {voice: true, text: ["這方向頂風，船在罷工啦！快轉！","嗯哼，進死角了！換個角度！","頂風衝？勇氣可嘉但船不動喔！"]},
-  sailTooIn: {voice: true, text: ["帆繃那麼緊幹嘛，讓風進來啊！","帆角太小，風都憋死了！放開！","帆縮那麼緊，船飛不起來啦！"]},
+  noGoZone:  {voice: true, text: ["這方向頂風，你的帆在飄了！","進死角囉！換個角度！","不可以正對風向喔！"]},
+  sailTooIn: {voice: true, text: ["帆再放多一點！","帆繩多放一點！","帆縮那麼緊，船飛不起來啦！"]},
   sailTooOut:{voice: true, text: ["帆放那麼開，是在晾衣服嗎？","帆都快飛走了！快收一點！","帆角太大，風都跑光了！收！"]},
-  goodSpeed: {voice: true, text: ["就這樣！年輕人有希望！","速度到位！老師我感動了！"]},
-  slowSpeed: {voice: true, text: ["這速度，龜都比你快啦！","動起來！老師我看了很著急！"]},
-  nearMark:  {voice: true, text: ["那個浮標！繞過去！","快到了！眼睛放亮！","目標在眼前，漂亮繞過去！"]},
+  goodSpeed: {voice: true, text: ["很好喔！速度有出來了","開的很好哦！速度很快耶"]},
+  slowSpeed: {voice: true, text: ["帆在飄了！","動起來！老師我看了很著急！"]},
+nearMark:  {voice: true, text: ["那個浮標！繞過去！","快到了！眼睛放亮！","目標在眼前，漂亮繞過去！"]},
   tacking:   {voice: true, text: ["換舷！帆跟著換邊！","Z字形走法，這才是帆船精髓！","漂亮轉彎！帆調好！"]},
   finish:    {voice: true, text: ["開得好！教練請你吃鬆餅！"]},
-  start:     {voice: true, text: ["出發！讓風看看你多厲害！","預備——衝！帥氣的！","年輕人，展示你的本事！走！"]},
+  start:     {voice: true, text: ["出發！讓風看看你多厲害！","趕快下水吧！快點現在風很好哦！","年輕人，展示你的本事！走！"]},
 };
 function getBearTip(cat) {
   const tips=BEAR_TIPS[cat];
