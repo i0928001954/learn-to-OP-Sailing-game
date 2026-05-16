@@ -43,25 +43,41 @@ const BEAR_TIPS = {
   finish:    {voice: true,  text: ["過關！老師我臉上有光！","你做到了！我沒白教你！","完美！老師請你喝汽水！"]},
   start:     {voice: true,  text: ["出發！讓風看看你多厲害！","預備——衝！帥氣的！","年輕人，展示你的本事！走！"]},
 };
-function getBearTip(cat) { const tips=BEAR_TIPS[cat]; return {voice:tips.voice, text:tips.text[Math.floor(Math.random()*tips.text.length)]}; }
+function getBearTip(cat) {
+  const tips=BEAR_TIPS[cat];
+  const idx=Math.floor(Math.random()*tips.text.length);
+  return {voice:tips.voice, text:tips.text[idx], idx};
+}
+
+// Shared audio element — reuse to avoid overlapping voices
+let _bearAudio = null;
+function _stopBearAudio() { if(_bearAudio){ _bearAudio.pause(); _bearAudio.currentTime=0; } }
 
 let voicesLoaded = false;
-function speakBear(text, shouldSpeak) {
-  if (!shouldSpeak || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang="zh-TW"; utt.rate=0.9; utt.pitch=0.65; utt.volume=1;
-  const tryVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    // prefer deep male zh voices: Zhiwei(Win), Yu-shu/Yunjian/Yunfeng(Azure), Tong/Liang/Ming/Kun(others)
-    const prefer = ["Zhiwei","Yunjian","Yunfeng","Yu-shu","Tong","Liang","Ming","Kun","Yu","Daniel"];
-    const maleZh = voices.find(v=>(v.lang.startsWith("zh")||v.lang.startsWith("cmn"))&&prefer.some(n=>v.name.includes(n)));
-    const anyZh  = voices.find(v=> v.lang.startsWith("zh")||v.lang.startsWith("cmn"));
-    if (maleZh) utt.voice=maleZh; else if (anyZh) utt.voice=anyZh;
-    window.speechSynthesis.speak(utt);
-  };
-  if (!voicesLoaded) { window.speechSynthesis.onvoiceschanged=()=>{voicesLoaded=true;tryVoice();}; tryVoice(); }
-  else tryVoice();
+function speakBear(cat, idx, text, shouldSpeak) {
+  if (!shouldSpeak) return;
+  _stopBearAudio();
+  // Try pre-recorded MP3 first (public/audio/<cat>_<idx>.mp3)
+  const audio = new Audio(`/audio/${cat}_${idx}.mp3`);
+  audio.volume = 1;
+  _bearAudio = audio;
+  audio.play().catch(() => {
+    // Fallback: browser speechSynthesis
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang="zh-TW"; utt.rate=0.9; utt.pitch=0.65; utt.volume=1;
+    const tryVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const prefer = ["Zhiwei","Yunjian","Yunfeng","Yu-shu","Tong","Liang","Ming","Kun","Yu","Daniel"];
+      const maleZh = voices.find(v=>(v.lang.startsWith("zh")||v.lang.startsWith("cmn"))&&prefer.some(n=>v.name.includes(n)));
+      const anyZh  = voices.find(v=> v.lang.startsWith("zh")||v.lang.startsWith("cmn"));
+      if (maleZh) utt.voice=maleZh; else if (anyZh) utt.voice=anyZh;
+      window.speechSynthesis.speak(utt);
+    };
+    if (!voicesLoaded) { window.speechSynthesis.onvoiceschanged=()=>{voicesLoaded=true;tryVoice();}; tryVoice(); }
+    else tryVoice();
+  });
 }
 
 // ─── speed zone config ───────────────────────────────────────────
@@ -468,7 +484,7 @@ export default function OPSailboatGame() {
     if(lastBearCatRef.current===cat) return;
     lastBearCatRef.current=cat;
     const tip=getBearTip(cat);
-    setBearMsg(tip.text); setBearVisible(true); speakBear(tip.text, tip.voice);
+    setBearMsg(tip.text); setBearVisible(true); speakBear(cat, tip.idx, tip.text, tip.voice);
     if(bearTimerRef.current) clearTimeout(bearTimerRef.current);
     bearTimerRef.current=setTimeout(()=>{ setBearVisible(false); lastBearCatRef.current=""; },4000);
   },[]);
