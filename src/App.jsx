@@ -4,9 +4,12 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.4";
+const VERSION = "v1.5";
 const LAST_UPDATED = "2026-05-16";
 const MAX_SPEED = 3.0; // knots display max
+const LB_KEY = "op_leaderboard4";
+const LB_MAX = 10; // max stored entries per level
+const fmtTime = s => `${Math.floor(s/60)}:${(s%60).toFixed(2).padStart(5,"0")}`;
 
 function polarSpeed(a) {
   const ab = Math.abs(a);
@@ -510,6 +513,48 @@ function SailSlider({ value, onChange }) {
   );
 }
 
+// ─── Leaderboard modal ───────────────────────────────────────────
+function LeaderboardModal({ lbData, levels, initLevel, onClose }) {
+  const [tab, setTab] = useState(initLevel ?? null);
+  const getLv = id => lbData[`lv${id}`] || [];
+  const allEntries = levels.flatMap(lv => getLv(lv.id).map(e=>({...e, lvId:lv.id, lvName:lv.name})));
+  allEntries.sort((a,b)=>a.time-b.time);
+  const entries = tab===null ? allEntries : getLv(tab);
+  const activeLevel = levels.find(l=>l.id===tab);
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:"linear-gradient(160deg,#051e34,#0a4a72)",borderRadius:20,width:"100%",maxWidth:460,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",border:"1px solid rgba(96,200,255,0.25)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",fontFamily:"'Noto Sans TC','PingFang TC',sans-serif",color:"#fff"}}>
+        <div style={{padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid rgba(255,255,255,0.1)"}}>
+          <span style={{fontWeight:900,fontSize:16}}>🏆 排行榜{activeLevel?` — 關卡${activeLevel.id} ${activeLevel.name}`:""}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.6)",fontSize:22,cursor:"pointer",lineHeight:1}}>✕</button>
+        </div>
+        <div style={{display:"flex",gap:5,padding:"8px 10px",overflowX:"auto",borderBottom:"1px solid rgba(255,255,255,0.08)",flexShrink:0}}>
+          <button onClick={()=>setTab(null)} style={{padding:"4px 12px",borderRadius:20,border:"none",cursor:"pointer",background:tab===null?"#22c55e":"rgba(255,255,255,0.1)",color:"#fff",fontSize:11,flexShrink:0,fontWeight:tab===null?700:400}}>全部</button>
+          {levels.map(lv=>(
+            <button key={lv.id} onClick={()=>setTab(lv.id)} style={{padding:"4px 10px",borderRadius:20,border:"none",cursor:"pointer",background:tab===lv.id?"#22c55e":"rgba(255,255,255,0.1)",color:"#fff",fontSize:11,flexShrink:0,fontWeight:tab===lv.id?700:400}}>{lv.id}.{lv.name}</button>
+          ))}
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"10px 12px 18px"}}>
+          {entries.length===0 ? (
+            <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",padding:32,fontSize:13}}>還沒有紀錄，快去挑戰！⛵</div>
+          ) : entries.map((e,i)=>{
+            const medal=["🥇","🥈","🥉"][i];
+            return (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,background:i===0?"rgba(250,204,21,0.12)":i<3?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.02)",marginBottom:3,border:i===0?"1px solid rgba(250,204,21,0.25)":"1px solid transparent"}}>
+                <span style={{width:24,textAlign:"center",fontSize:i<3?16:12,color:["#facc15","#cbd5e1","#b45309"][i]||"rgba(255,255,255,0.4)",flexShrink:0}}>{medal||i+1}</span>
+                <span style={{flex:1,fontWeight:i<3?700:400,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}</span>
+                {tab===null&&<span style={{fontSize:10,color:"#7ed6ff",flexShrink:0,background:"rgba(96,200,255,0.12)",borderRadius:8,padding:"1px 6px"}}>關{e.lvId}</span>}
+                <span style={{fontSize:14,fontVariantNumeric:"tabular-nums",color:i===0?"#facc15":"#fff",fontWeight:600,flexShrink:0}}>{fmtTime(e.time)}</span>
+                <span style={{fontSize:9,color:"rgba(255,255,255,0.3)",flexShrink:0}}>{e.date}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════
 // MAIN
 // ════════════════════════════════════════════
@@ -530,6 +575,26 @@ export default function OPSailboatGame() {
   const [speedDisplay, setSpeedDisplay] = useState(0);
   const [speedRatio, setSpeedRatio] = useState(0); // for CSS overlay effects
   const [records, setRecords] = useState(()=>{ try{return JSON.parse(localStorage.getItem("op_records3")||"{}")}catch{return{}} });
+  const [playerName, setPlayerName] = useState(()=>localStorage.getItem("op_player_name")||"");
+  const [lbData, setLbData] = useState(()=>{ try{return JSON.parse(localStorage.getItem(LB_KEY)||"{}")}catch{return{}} });
+  const [showLb, setShowLb] = useState(false);
+  const [lbLevel, setLbLevel] = useState(null);
+
+  const playerNameRef = useRef(playerName);
+  useEffect(()=>{ playerNameRef.current=playerName; },[playerName]);
+
+  const saveLbRecord = useCallback((name, lvId, time)=>{
+    setLbData(prev=>{
+      const key=`lv${lvId}`;
+      const list=[...(prev[key]||[]),{name:name||"訪客",time,date:new Date().toLocaleDateString("zh-TW")}];
+      list.sort((a,b)=>a.time-b.time);
+      const next={...prev,[key]:list.slice(0,LB_MAX)};
+      try{localStorage.setItem(LB_KEY,JSON.stringify(next))}catch{};
+      return next;
+    });
+  },[]);
+  const saveLbRecordRef = useRef(saveLbRecord);
+  useEffect(()=>{ saveLbRecordRef.current=saveLbRecord; },[saveLbRecord]);
 
   const [headUp, setHeadUp] = useState(true);
   const headUpRef = useRef(true);
@@ -620,6 +685,7 @@ export default function OPSailboatGame() {
         if(g.currentMark<lv.marks.length-1){ g.currentMark++; setCurrentMark(g.currentMark); showBear("nearMark"); }
         else{
           g.finished=true; const ft=g.elapsed; setElapsed(ft); setGameState("finished"); showBear("finish");
+          saveLbRecordRef.current(playerNameRef.current, lv.id, ft);
           setRecords(prev=>{ const k=`lv${lv.id}`; const u=(!prev[k]||ft<prev[k])?{...prev,[k]:ft}:prev; try{localStorage.setItem("op_records3",JSON.stringify(u))}catch{}; return u; });
           return;
         }
@@ -739,7 +805,6 @@ export default function OPSailboatGame() {
 
   const handleRudder=useCallback(v=>{ rudderRef.current=v; },[]);
   const handleSail=useCallback(v=>{ gameRef.current.sailAngle=v; },[]);
-  const fmtTime=s=>`${Math.floor(s/60)}:${(s%60).toFixed(2).padStart(5,"0")}`;
 
   // speed zone for CSS effects
   const zone = speedZone(speedRatio);
@@ -750,25 +815,37 @@ export default function OPSailboatGame() {
       <div style={{fontSize:58}}>⛵</div>
       <h1 style={{fontSize:"clamp(20px,5vw,34px)",fontWeight:900,letterSpacing:2,margin:"6px 0 4px",background:"linear-gradient(90deg,#fff,#7ed6ff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>OP 小帆船學習遊戲</h1>
       <p style={{color:"#7ed6ff",fontSize:13,margin:"0 0 6px"}}>掌握風帆，成為海上飛人！</p>
-      <p style={{color:"rgba(126,214,255,0.5)",fontSize:10,margin:"0 0 16px",letterSpacing:1}}>{VERSION} · 更新：{LAST_UPDATED}</p>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
+      <p style={{color:"rgba(126,214,255,0.5)",fontSize:10,margin:"0 0 14px",letterSpacing:1}}>{VERSION} · 更新：{LAST_UPDATED}</p>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
+        <span style={{fontSize:18}}>👤</span>
+        <span style={{fontSize:13}}>玩家名稱</span>
+        <input value={playerName} onChange={e=>{setPlayerName(e.target.value);localStorage.setItem("op_player_name",e.target.value);}} placeholder="輸入你的名稱" maxLength={12}
+          style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 12px",color:"#fff",fontSize:13,outline:"none",width:120,textAlign:"center"}}/>
+        <button onClick={()=>{setLbLevel(null);setShowLb(true);}} style={{background:"rgba(250,204,21,0.18)",border:"1px solid rgba(250,204,21,0.35)",borderRadius:20,padding:"4px 12px",color:"#facc15",fontSize:12,cursor:"pointer",fontWeight:700,flexShrink:0}}>🏆 排行榜</button>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
         <span style={{fontSize:22}}>🐻</span><span style={{fontSize:13}}>黑熊教練語音</span>
         <button onClick={()=>setCoachOn(p=>!p)} style={{width:46,height:24,borderRadius:12,border:"none",cursor:"pointer",background:coachOn?"#22c55e":"#555",transition:"background 0.2s",position:"relative"}}>
           <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:coachOn?25:3,transition:"left 0.2s"}}/>
         </button>
         <span style={{fontSize:11,color:"#adf"}}>{coachOn?"ON 🔊":"OFF"}</span>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,width:"100%",maxWidth:500,marginBottom:16}}>
-        {LEVELS.map((lv,i)=>{ const rec=records[`lv${lv.id}`]; return (
-          <button key={lv.id} onClick={()=>{setLevelIdx(i);startLevel(i);}}
-            style={{background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:12,padding:"12px 8px",cursor:"pointer",color:"#fff",transition:"all 0.18s",textAlign:"center"}}
-            onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}
-            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.09)"}>
-            <div style={{fontSize:20,marginBottom:4}}>{["🌊","💨","⬆️","🔄","🏁","🌀","⚡","🎯"][i]}</div>
-            <div style={{fontWeight:700,fontSize:12,marginBottom:2}}>關卡 {lv.id}</div>
-            <div style={{fontSize:11,color:"#7ed6ff",marginBottom:4}}>{lv.name}</div>
-            {rec&&<div style={{fontSize:10,color:"#fbbf24"}}>🏆 {fmtTime(rec)}</div>}
-          </button>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,width:"100%",maxWidth:500,marginBottom:14}}>
+        {LEVELS.map((lv,i)=>{ const rec=records[`lv${lv.id}`]; const top=(lbData[`lv${lv.id}`]||[])[0]; return (
+          <div key={lv.id} style={{position:"relative"}}>
+            <button onClick={()=>{setLevelIdx(i);startLevel(i);}}
+              style={{width:"100%",background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:12,padding:"12px 8px 10px",cursor:"pointer",color:"#fff",transition:"all 0.18s",textAlign:"center"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}
+              onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.09)"}>
+              <div style={{fontSize:20,marginBottom:4}}>{["🌊","💨","⬆️","🔄","🏁","🌀","⚡","🎯"][i]}</div>
+              <div style={{fontWeight:700,fontSize:12,marginBottom:2}}>關卡 {lv.id}</div>
+              <div style={{fontSize:11,color:"#7ed6ff",marginBottom:4}}>{lv.name}</div>
+              {rec&&<div style={{fontSize:10,color:"#fbbf24"}}>我的：{fmtTime(rec)}</div>}
+              {top&&<div style={{fontSize:9,color:"#86efac",marginTop:1}}>👑 {top.name} {fmtTime(top.time)}</div>}
+            </button>
+            <button onClick={e=>{e.stopPropagation();setLbLevel(lv.id);setShowLb(true);}}
+              style={{position:"absolute",top:5,right:5,background:"rgba(250,204,21,0.2)",border:"1px solid rgba(250,204,21,0.3)",borderRadius:7,padding:"1px 6px",fontSize:9,color:"#facc15",cursor:"pointer",lineHeight:"16px"}}>榜</button>
+          </div>
         );})}
       </div>
       <div style={{background:"rgba(0,0,0,0.28)",borderRadius:12,padding:"10px 18px",fontSize:12,color:"#adf",textAlign:"center",maxWidth:380}}>
@@ -777,26 +854,50 @@ export default function OPSailboatGame() {
         <div style={{marginTop:2}}>📱 右搖桿：上推收帆，下拉放帆</div>
         <div style={{marginTop:2,opacity:0.7}}>⌨️ ← → 轉舵 ｜ ↑ ↓ 調帆角</div>
       </div>
+      {showLb&&<LeaderboardModal lbData={lbData} levels={LEVELS} initLevel={lbLevel} onClose={()=>setShowLb(false)}/>}
     </div>
   );
 
   // ─── FINISHED ────────────────────────────────────────────────────
-  if(gameState==="finished"){ const rec=records[`lv${level.id}`]; return (
+  if(gameState==="finished"){ const rec=records[`lv${level.id}`];
+    const lvLb=lbData[`lv${level.id}`]||[];
+    const myRank=lvLb.findIndex(e=>e.name===(playerName||"訪客")&&Math.abs(e.time-elapsed)<0.02);
+    return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#062a4a,#0a5a8c)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Noto Sans TC','PingFang TC',sans-serif",color:"#fff",padding:20}}>
       <div style={{fontSize:68}}>🎉</div>
       <h2 style={{fontSize:26,fontWeight:900,margin:"6px 0"}}>關卡完成！</h2>
-      <p style={{color:"#7ed6ff",margin:"0 0 16px"}}>關卡 {level.id}：{level.name}</p>
-      <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:"18px 40px",textAlign:"center",marginBottom:16}}>
-        <div style={{fontSize:12,color:"#adf",marginBottom:4}}>完成時間</div>
-        <div style={{fontSize:42,fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{fmtTime(elapsed)}</div>
-        {rec&&rec>=elapsed?<div style={{fontSize:13,color:"#22c55e",marginTop:4}}>⭐ 新紀錄！</div>:rec&&<div style={{fontSize:11,color:"#fbbf24",marginTop:4}}>🏆 最佳：{fmtTime(rec)}</div>}
+      <p style={{color:"#7ed6ff",margin:"0 0 10px"}}>關卡 {level.id}：{level.name}</p>
+      <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:"14px 36px",textAlign:"center",marginBottom:12}}>
+        <div style={{fontSize:11,color:"#adf",marginBottom:2}}>完成時間</div>
+        <div style={{fontSize:40,fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{fmtTime(elapsed)}</div>
+        {myRank===0?<div style={{fontSize:13,color:"#facc15",marginTop:3}}>🥇 本關第一名！</div>
+          :myRank>0?<div style={{fontSize:12,color:"#adf",marginTop:3}}>排名第 {myRank+1} 名</div>
+          :rec&&rec>=elapsed?<div style={{fontSize:13,color:"#22c55e",marginTop:3}}>⭐ 個人新紀錄！</div>
+          :rec&&<div style={{fontSize:11,color:"#fbbf24",marginTop:3}}>個人最佳：{fmtTime(rec)}</div>}
       </div>
-      <div style={{fontSize:15,marginBottom:20,color:"#e2f4ff",maxWidth:300,textAlign:"center"}}>🐻 「{getBearTip("finish").text}」</div>
+      {lvLb.length>0&&(
+        <div style={{width:"100%",maxWidth:340,background:"rgba(255,255,255,0.07)",borderRadius:14,padding:"10px 14px",marginBottom:12}}>
+          <div style={{fontSize:11,color:"#7ed6ff",fontWeight:700,marginBottom:7}}>🏆 本關排行榜</div>
+          {lvLb.slice(0,5).map((e,i)=>{
+            const isMe=i===myRank;
+            return (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 6px",borderRadius:8,background:isMe?"rgba(34,197,94,0.22)":"transparent",marginBottom:2,border:isMe?"1px solid rgba(34,197,94,0.4)":"1px solid transparent"}}>
+                <span style={{width:22,textAlign:"center",fontSize:i<3?14:11}}>{["🥇","🥈","🥉"][i]||i+1}</span>
+                <span style={{flex:1,fontSize:12,fontWeight:isMe?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}{isMe?" 👈":""}</span>
+                <span style={{fontSize:12,fontVariantNumeric:"tabular-nums",fontWeight:isMe?700:400,color:i===0?"#facc15":"#fff"}}>{fmtTime(e.time)}</span>
+              </div>
+            );
+          })}
+          <button onClick={()=>{setLbLevel(level.id);setShowLb(true);}} style={{marginTop:6,width:"100%",background:"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#adf",padding:"5px 0",fontSize:11,cursor:"pointer"}}>查看完整排行榜</button>
+        </div>
+      )}
+      <div style={{fontSize:14,marginBottom:16,color:"#e2f4ff",maxWidth:300,textAlign:"center"}}>🐻 「{getBearTip("finish").text}」</div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
         <button onClick={()=>startLevel(levelIdx)} style={{background:"#f97316",border:"none",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>🔄 再玩一次</button>
         {levelIdx<LEVELS.length-1&&<button onClick={()=>{const n=levelIdx+1;setLevelIdx(n);startLevel(n);}} style={{background:"#22c55e",border:"none",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>下一關 ➜</button>}
         <button onClick={()=>setGameState("menu")} style={{background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>🏠 選關</button>
       </div>
+      {showLb&&<LeaderboardModal lbData={lbData} levels={LEVELS} initLevel={lbLevel} onClose={()=>setShowLb(false)}/>}
     </div>
   ); }
 
