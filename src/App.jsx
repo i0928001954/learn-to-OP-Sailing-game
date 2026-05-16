@@ -534,7 +534,7 @@ export default function OPSailboatGame() {
       if(prevWindSide!==0&&windSide!==prevWindSide) showBear("tacking");
       prevWindSide=windSide;
 
-      const turnRate=rudderRef.current*Math.max(g.speed,0.42)*28;
+      const turnRate=rudderRef.current*Math.max(g.speed,0.55)*36;
       g.heading=(g.heading+turnRate*dt+360)%360;
       const rad=g.heading*Math.PI/180;
       g.x=Math.max(15,Math.min(CANVAS_W-15,g.x+Math.sin(rad)*g.speed*dt*60));
