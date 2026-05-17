@@ -4,8 +4,8 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.5";
-const LAST_UPDATED = "2026-05-16";
+const VERSION = "v1.6";
+const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard4";
 const LB_MAX = 10; // max stored entries per level
@@ -626,7 +626,7 @@ export default function OPSailboatGame() {
   const startLevel = useCallback(idx=>{
     unlockAudio();
     const lv=LEVELS[idx]; const g=gameRef.current;
-    Object.assign(g,{x:lv.startPos.x,y:lv.startPos.y,heading:lv.startHeading,speed:0,sailAngle:45,angleDiff:0,currentMark:0,startTime:null,elapsed:0,finished:false,t:0,trail:[]});
+    Object.assign(g,{x:lv.startPos.x,y:lv.startPos.y,heading:lv.startHeading,speed:0,maxSailAngle:45,actualSailAngle:45,sailOsc:0,angleDiff:0,currentMark:0,startTime:null,elapsed:0,finished:false,t:0,trail:[]});
     rudderRef.current=0;
     setCurrentMark(0); setElapsed(0); setSailAngleDisplay(45); setSpeedDisplay(0); setSpeedRatio(0);
     setGameState("playing"); setBearVisible(false); lastBearCatRef.current="";
@@ -652,14 +652,21 @@ export default function OPSailboatGame() {
       const keys=keysRef.current;
       if(keys["ArrowLeft"])  rudderRef.current=Math.max(rudderRef.current-dt*3.5,-1);
       else if(keys["ArrowRight"]) rudderRef.current=Math.min(rudderRef.current+dt*3.5,1);
-      if(keys["ArrowUp"])   g.sailAngle=Math.min(g.sailAngle+dt*38,100);
-      if(keys["ArrowDown"]) g.sailAngle=Math.max(g.sailAngle-dt*38,0);
+      if(keys["ArrowUp"])   g.maxSailAngle=Math.min(g.maxSailAngle+dt*38,100);
+      if(keys["ArrowDown"]) g.maxSailAngle=Math.max(g.maxSailAngle-dt*38,0);
 
       // physics
       const windFrom=(lv.windDir+180)%360;
       g.angleDiff=((g.heading-windFrom+540)%360)-180;
       const optSail=optimalSailAngle(Math.abs(g.angleDiff));
-      const sailEff=Math.max(0,1-Math.abs(g.sailAngle-optSail)/72);
+
+      // Sail oscillation: limit actual sail angle by maxSailAngle, ease toward optSail, add wind shake
+      const maxActual = Math.min(optSail, g.maxSailAngle);
+      g.sailOsc += dt * (Math.random() - 0.5) * 8 - g.sailOsc * dt * 2; // decay + random walk
+      const targetActualSail = Math.max(0, Math.min(maxActual, optSail + g.sailOsc * 3));
+      g.actualSailAngle += (targetActualSail - g.actualSailAngle) * dt * 3.5;
+
+      const sailEff=Math.max(0,1-Math.abs(g.actualSailAngle-optSail)/72);
       const targetSpeed=polarSpeed(g.angleDiff)*sailEff*lv.windSpeed*0.22;
       const accel = targetSpeed > g.speed ? 1.6 : 0.42;
       g.speed+=(targetSpeed-g.speed)*dt*accel;
@@ -691,16 +698,16 @@ export default function OPSailboatGame() {
         }
       }
 
-      // coach
+      // coach (compare actual vs optimal)
       if(Math.abs(g.angleDiff)<40&&g.speed<0.2) showBear("noGoZone");
-      else if(g.sailAngle<optSail-30&&g.speed>0.15&&Math.abs(g.angleDiff)>35) showBear("sailTooIn");
-      else if(g.sailAngle>Math.min(optSail+30,100)&&g.speed>0.15&&Math.abs(g.angleDiff)>35) showBear("sailTooOut");
+      else if(g.actualSailAngle<optSail-30&&g.speed>0.15&&Math.abs(g.angleDiff)>35) showBear("sailTooIn");
+      else if(g.actualSailAngle>Math.min(optSail+30,100)&&g.speed>0.15&&Math.abs(g.angleDiff)>35) showBear("sailTooOut");
       else if(g.speed>targetSpeed*0.85&&targetSpeed>0.5) showBear("goodSpeed");
       else if(targetSpeed>0.3&&g.speed<targetSpeed*0.4&&g.elapsed>3) showBear("slowSpeed");
       if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)<110) showBear("nearMark");
 
       const ratio=Math.min(g.speed/MAX_SPEED,1);
-      setElapsed(g.elapsed); setSailAngleDisplay(Math.round(g.sailAngle));
+      setElapsed(g.elapsed); setSailAngleDisplay(Math.round(g.maxSailAngle));
       setSpeedDisplay(+(g.speed*10).toFixed(1)); setSpeedRatio(ratio);
 
       // ── Draw ──
@@ -734,13 +741,13 @@ export default function OPSailboatGame() {
       lv.marks.forEach((mk,i)=>drawMark(ctx,mk,i<g.currentMark,i===g.currentMark));
 
       // Normal mode: boat at world position with actual heading
-      if (!isHeadUp) drawBoat(ctx,g.x,g.y,g.heading,g.sailAngle,windSide,ratio);
+      if (!isHeadUp) drawBoat(ctx,g.x,g.y,g.heading,g.actualSailAngle,windSide,ratio);
 
       // End world transform
       if (isHeadUp) ctx.restore();
 
       // Head-up mode: boat always at canvas centre, always facing up
-      if (isHeadUp) drawBoat(ctx,CANVAS_W/2,CANVAS_H/2,0,g.sailAngle,windSide,ratio);
+      if (isHeadUp) drawBoat(ctx,CANVAS_W/2,CANVAS_H/2,0,g.actualSailAngle,windSide,ratio);
 
       // ── Head-up target arrow (canvas space, drawn after world transform removed) ──
       if (isHeadUp && mark) {
@@ -804,7 +811,7 @@ export default function OPSailboatGame() {
   },[]);
 
   const handleRudder=useCallback(v=>{ rudderRef.current=v; },[]);
-  const handleSail=useCallback(v=>{ gameRef.current.sailAngle=v; },[]);
+  const handleSail=useCallback(v=>{ gameRef.current.maxSailAngle=v; },[]);
 
   // speed zone for CSS effects
   const zone = speedZone(speedRatio);
