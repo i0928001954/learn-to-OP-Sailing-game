@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v0.7";
+const VERSION = "v0.8";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard4";
@@ -77,17 +77,25 @@ function speakBear(coachId, cat, idx, text, shouldSpeak) {
   audio.volume = 1;
   _bearAudio = audio;
 
-  let audioAttempted = false;
-  audio.onerror = () => {
-    audioAttempted = true;
-    useTTS();
+  let fallbackTriggered = false;
+
+  // Success: MP3 is playing, don't use TTS
+  audio.onplay = () => {
+    fallbackTriggered = true; // Mark that audio is playing, prevent TTS
   };
 
-  audio.play().then(() => {
-    audioAttempted = true;
-  }).catch(() => {
-    if (!audioAttempted) {
-      audioAttempted = true;
+  // Error: MP3 failed to load or play, use TTS
+  audio.onerror = () => {
+    if (!fallbackTriggered) {
+      fallbackTriggered = true;
+      useTTS();
+    }
+  };
+
+  // Promise rejection: play() failed (browser blocked autoplay, etc)
+  audio.play().catch(() => {
+    if (!fallbackTriggered) {
+      fallbackTriggered = true;
       useTTS();
     }
   });
