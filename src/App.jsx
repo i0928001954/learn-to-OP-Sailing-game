@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.6";
+const VERSION = "v1.7";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard4";
@@ -43,72 +43,50 @@ const COACH_LIST = [
   { id:"pengzhou", name:"鵬洲教練", emoji:"👨‍✈️", description:"親切認真" },
 ];
 
-// Shared audio element — reuse to avoid overlapping voices
+// ── Backend switch: "tts" = browser TTS, "mp3" = pre-recorded files ──────────
+// Change to "mp3" after running scripts/gen_audio.py to generate public/audio/
+const AUDIO_MODE = "tts";
+
 let _bearAudio = null;
 function _stopBearAudio() {
-  if (_bearAudio) { _bearAudio.pause(); _bearAudio.currentTime = 0; }
+  if (_bearAudio) { _bearAudio.pause(); _bearAudio.currentTime = 0; _bearAudio = null; }
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 let voicesLoaded = false;
 function speakBear(coachId, cat, idx, text, shouldSpeak) {
   if (!shouldSpeak) return;
-  _stopBearAudio();
-  window.speechSynthesis.cancel(); // cancel any pending TTS
+  _stopBearAudio(); // always stop whatever is playing first
 
-  // TTS fallback — only fires once
-  let ttsUsed = false;
-  function useTTS() {
-    if (ttsUsed) return; ttsUsed = true;
-    if (!("speechSynthesis" in window)) return;
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang="zh-TW"; utt.rate=0.9; utt.pitch=0.65; utt.volume=1;
-    const tryVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const prefer = ["Zhiwei","Yunjian","Yunfeng","Yu-shu","Tong","Liang","Ming","Kun","Yu","Daniel"];
-      const maleZh = voices.find(v=>(v.lang.startsWith("zh")||v.lang.startsWith("cmn"))&&prefer.some(n=>v.name.includes(n)));
-      const anyZh  = voices.find(v=> v.lang.startsWith("zh")||v.lang.startsWith("cmn"));
-      if (maleZh) utt.voice=maleZh; else if (anyZh) utt.voice=anyZh;
-      window.speechSynthesis.speak(utt);
-    };
-    // Only call tryVoice once: immediately if voices ready, otherwise wait for the event
-    const voices = window.speechSynthesis.getVoices();
-    if (voicesLoaded || voices.length > 0) { voicesLoaded = true; tryVoice(); }
-    else { window.speechSynthesis.onvoiceschanged = () => { voicesLoaded = true; tryVoice(); }; }
+  if (AUDIO_MODE === "mp3") {
+    // ── MP3 path: play file, no TTS fallback ───────────────────────
+    const audio = new Audio(`/audio/${coachId}/${cat}_${idx}.mp3`);
+    audio.volume = 1;
+    _bearAudio = audio;
+    audio.play().catch(()=>{});
+    return;
   }
 
-  // Try pre-recorded MP3 first; fall back to TTS on any failure
-  const audio = new Audio(`/audio/${coachId}/${cat}_${idx}.mp3`);
-  audio.volume = 1;
-  _bearAudio = audio;
-
-  let fallbackTriggered = false;
-
-  // Success: MP3 is playing, don't use TTS
-  audio.onplay = () => {
-    fallbackTriggered = true; // Mark that audio is playing, prevent TTS
+  // ── TTS path: speechSynthesis only, no MP3 ─────────────────────
+  if (!("speechSynthesis" in window)) return;
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang="zh-TW"; utt.rate=0.9; utt.pitch=0.65; utt.volume=1;
+  const doSpeak = () => {
+    const voices = window.speechSynthesis.getVoices();
+    const prefer = ["Zhiwei","Yunjian","Yunfeng","Yu-shu","Tong","Liang","Ming","Kun","Yu","Daniel"];
+    const maleZh = voices.find(v=>(v.lang.startsWith("zh")||v.lang.startsWith("cmn"))&&prefer.some(n=>v.name.includes(n)));
+    const anyZh  = voices.find(v=> v.lang.startsWith("zh")||v.lang.startsWith("cmn"));
+    if (maleZh) utt.voice=maleZh; else if (anyZh) utt.voice=anyZh;
+    window.speechSynthesis.speak(utt);
   };
-
-  // Error: MP3 failed to load or play, use TTS
-  audio.onerror = () => {
-    if (!fallbackTriggered) {
-      fallbackTriggered = true;
-      useTTS();
-    }
-  };
-
-  // Promise rejection: play() failed (browser blocked autoplay, etc)
-  audio.play().catch(() => {
-    if (!fallbackTriggered) {
-      fallbackTriggered = true;
-      useTTS();
-    }
-  });
+  const voices = window.speechSynthesis.getVoices();
+  if (voicesLoaded || voices.length > 0) { voicesLoaded = true; doSpeak(); }
+  else { window.speechSynthesis.onvoiceschanged = () => { voicesLoaded = true; doSpeak(); }; }
 }
 
-// Call once from a user-gesture handler to unlock speechSynthesis (iOS/Safari)
+// Unlock speechSynthesis on iOS/Safari via user gesture (TTS mode only)
 function unlockAudio() {
-  if ("speechSynthesis" in window) {
+  if (AUDIO_MODE === "tts" && "speechSynthesis" in window) {
     const u = new SpeechSynthesisUtterance(""); u.volume = 0;
     window.speechSynthesis.speak(u);
   }
