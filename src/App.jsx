@@ -16,7 +16,8 @@ const LB_MAX = 10; // max stored entries per level
 //   3. 複製 URL（形如 https://xxx-rtdb.asia-southeast1.firebasedatabase.app）貼到下方
 //   4. 規則頁面貼上:
 //      { "rules": { "leaderboard": { ".read": true, "$l": { "$p": { ".write": true } } } } }
-const CLOUD_DB_URL = "";
+const CLOUD_DB_URL = "
+https://opsailing-8d612-default-rtdb.asia-southeast1.firebasedatabase.app/";
 const fmtTime = s => `${Math.floor(s/60)}:${(s%60).toFixed(2).padStart(5,"0")}`;
 
 function polarSpeed(a) {
