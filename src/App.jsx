@@ -4,11 +4,15 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v2.1";
+const VERSION = "v2.2";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard5";
 const LB_MAX = 10; // max stored entries per level
+// Set to your Firebase Realtime Database URL to enable cloud leaderboard
+// e.g. "https://your-project-default-rtdb.asia-southeast1.firebasedatabase.app"
+// Database rules must allow public read/write: { "rules": { ".read": true, ".write": true } }
+const CLOUD_DB_URL = "";
 const fmtTime = s => `${Math.floor(s/60)}:${(s%60).toFixed(2).padStart(5,"0")}`;
 
 function polarSpeed(a) {
@@ -39,7 +43,7 @@ const LEVELS = [
 ];
 
 const COACH_LIST = [
-  { id:"bear",     name:"黑熊教練", emoji:"🐻",     description:"幽默搞笑" },
+  { id:"bear",     name:"灰熊教練", emoji:"🐻",     description:"幽默搞笑" },
   { id:"pengzhou", name:"鵬洲教練", emoji:"👨‍✈️", description:"親切認真" },
 ];
 
@@ -498,7 +502,7 @@ function drawBoat(ctx, x, y, heading, sailAngle, windSide, speedRatio) {
 // ─── Joystick ────────────────────────────────────────────────────
 function Joystick({ onRudder }) {
   const activeRef=useRef(false), startYRef=useRef(0);
-  const TRACK_H=110, KNOB_R=22;
+  const TRACK_H=160, KNOB_R=30;
   const [knobY, setKnobY]=useState(0);
   const update = useCallback(rawY=>{
     const c=Math.max(-1,Math.min(1,rawY)); setKnobY(c); onRudder(-c);
@@ -508,15 +512,15 @@ function Joystick({ onRudder }) {
   const onPU=()=>{ activeRef.current=false; setKnobY(0); onRudder(0); };
   const knobPx=knobY*(TRACK_H/2-KNOB_R);
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:1,minWidth:70}}>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:1,minWidth:90}}>
       <span style={{fontSize:10,color:"#7ed6ff",fontWeight:600}}>🚢 舵</span>
       <div style={{fontSize:9,color:"#4a8aaa",lineHeight:1.3,textAlign:"center"}}>上推右轉<br/>下拉左轉</div>
       <div onPointerDown={onPD} onPointerMove={onPM} onPointerUp={onPU} onPointerCancel={onPU}
-        style={{width:KNOB_R*2+8,height:TRACK_H,background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(96,180,255,0.3)",borderRadius:KNOB_R+4,position:"relative",cursor:"grab",touchAction:"none",WebkitTapHighlightColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        style={{width:KNOB_R*2+24,height:TRACK_H,background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(96,180,255,0.3)",borderRadius:KNOB_R+12,position:"relative",cursor:"grab",touchAction:"none",WebkitTapHighlightColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:"60%",height:1,background:"rgba(255,255,255,0.2)",borderRadius:1}}/>
         <div style={{position:"absolute",left:"50%",top:"50%",transform:`translate(-50%,calc(-50% + ${knobPx}px))`,width:KNOB_R*2,height:KNOB_R*2,borderRadius:"50%",background:knobY===0?"radial-gradient(circle at 35% 35%,#7ed6ff,#1a6fa8)":"radial-gradient(circle at 35% 35%,#fbbf24,#b45309)",boxShadow:"0 2px 8px rgba(0,0,0,0.4)",pointerEvents:"none"}}/>
-        <div style={{position:"absolute",top:5,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.25)",fontSize:14,pointerEvents:"none"}}>▲</div>
-        <div style={{position:"absolute",bottom:5,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.25)",fontSize:14,pointerEvents:"none"}}>▼</div>
+        <div style={{position:"absolute",top:7,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.3)",fontSize:16,pointerEvents:"none"}}>▲</div>
+        <div style={{position:"absolute",bottom:7,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.3)",fontSize:16,pointerEvents:"none"}}>▼</div>
       </div>
       <span style={{fontSize:10,color:knobY===0?"#3a6a8a":"#fbbf24",fontWeight:600}}>
         {knobY<-0.1?"◀右轉":knobY>0.1?"左轉▶":"直行"}
@@ -527,44 +531,113 @@ function Joystick({ onRudder }) {
 
 function SailSlider({ value, onChange }) {
   const activeRef=useRef(false), startYRef=useRef(0), startValRef=useRef(value);
-  const TRACK_H=110, KNOB_R=22;
+  const TRACK_H=160, KNOB_R=30;
   const knobPx=((value/90)-0.5)*(-(TRACK_H-KNOB_R*2));
   const onPD=e=>{ e.currentTarget.setPointerCapture(e.pointerId); activeRef.current=true; startYRef.current=e.clientY; startValRef.current=value; };
   const onPM=e=>{ if(!activeRef.current) return; const dy=e.clientY-startYRef.current; onChange(Math.max(0,Math.min(100,startValRef.current-(dy/(TRACK_H-KNOB_R*2))*100))); };
   const onPU=()=>{ activeRef.current=false; };
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:1,minWidth:70}}>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:1,minWidth:90}}>
       <span style={{fontSize:10,color:"#f97316",fontWeight:600}}>⛵ 帆角</span>
       <div style={{fontSize:9,color:"#4a8aaa",lineHeight:1.3,textAlign:"center"}}>上推收帆<br/>下拉放帆</div>
       <div onPointerDown={onPD} onPointerMove={onPM} onPointerUp={onPU} onPointerCancel={onPU}
-        style={{width:KNOB_R*2+8,height:TRACK_H,background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(249,115,22,0.35)",borderRadius:KNOB_R+4,position:"relative",cursor:"ns-resize",touchAction:"none",WebkitTapHighlightColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        style={{width:KNOB_R*2+24,height:TRACK_H,background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(249,115,22,0.35)",borderRadius:KNOB_R+12,position:"relative",cursor:"ns-resize",touchAction:"none",WebkitTapHighlightColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{position:"absolute",left:"50%",top:KNOB_R,bottom:KNOB_R,width:3,transform:"translateX(-50%)",background:"linear-gradient(to bottom,rgba(249,115,22,0.5),rgba(96,200,255,0.3))",borderRadius:2}}/>
-        <div style={{position:"absolute",left:"50%",top:"50%",transform:`translate(-50%,calc(-50% + ${knobPx}px))`,width:KNOB_R*2,height:KNOB_R*2,borderRadius:"50%",background:"radial-gradient(circle at 35% 35%,#fdba74,#c2410c)",boxShadow:"0 2px 8px rgba(0,0,0,0.4)",pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:700}}>
+        <div style={{position:"absolute",left:"50%",top:"50%",transform:`translate(-50%,calc(-50% + ${knobPx}px))`,width:KNOB_R*2,height:KNOB_R*2,borderRadius:"50%",background:"radial-gradient(circle at 35% 35%,#fdba74,#c2410c)",boxShadow:"0 2px 8px rgba(0,0,0,0.4)",pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#fff",fontWeight:700}}>
           {Math.round(value)}°
         </div>
-        <div style={{position:"absolute",top:5,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.25)",fontSize:14,pointerEvents:"none"}}>▲</div>
-        <div style={{position:"absolute",bottom:5,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.25)",fontSize:14,pointerEvents:"none"}}>▼</div>
+        <div style={{position:"absolute",top:7,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.3)",fontSize:16,pointerEvents:"none"}}>▲</div>
+        <div style={{position:"absolute",bottom:7,left:"50%",transform:"translateX(-50%)",color:"rgba(255,255,255,0.3)",fontSize:16,pointerEvents:"none"}}>▼</div>
       </div>
       <span style={{fontSize:10,color:"#f97316",fontWeight:600}}>{value<20?"收帆":value>70?"放帆":"側風"}</span>
     </div>
   );
 }
 
+// ─── Cloud leaderboard helpers ───────────────────────────────────
+async function cloudSaveLb(lvId, name, time) {
+  if (!CLOUD_DB_URL) return;
+  try {
+    await fetch(`${CLOUD_DB_URL}/leaderboard/lv${lvId}.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, time, date: new Date().toLocaleDateString("zh-TW") }),
+    });
+  } catch {}
+}
+
+async function cloudFetchAllLb() {
+  if (!CLOUD_DB_URL) return {};
+  try {
+    const res = await fetch(`${CLOUD_DB_URL}/leaderboard.json`);
+    if (!res.ok) return {};
+    const raw = await res.json();
+    if (!raw) return {};
+    const result = {};
+    for (const [lvKey, lvEntries] of Object.entries(raw)) {
+      if (!lvEntries) continue;
+      const byName = {};
+      for (const entry of Object.values(lvEntries)) {
+        if (!entry?.name) continue;
+        if (!byName[entry.name] || entry.time < byName[entry.name].time) {
+          byName[entry.name] = entry;
+        }
+      }
+      result[lvKey] = Object.values(byName).sort((a, b) => a.time - b.time).slice(0, LB_MAX);
+    }
+    return result;
+  } catch { return {}; }
+}
+
 // ─── Leaderboard modal ───────────────────────────────────────────
-function LeaderboardModal({ lbData, levels, initLevel, onClose }) {
+function LeaderboardModal({ lbData, levels, initLevel, onClose, playerName }) {
   const [tab, setTab] = useState(initLevel ?? null);
-  const getLv = id => lbData[`lv${id}`] || [];
-  const allEntries = levels.flatMap(lv => getLv(lv.id).map(e=>({...e, lvId:lv.id, lvName:lv.name})));
+  const [viewCloud, setViewCloud] = useState(false);
+  const [cloudData, setCloudData] = useState(null);
+  const [cloudLoading, setCloudLoading] = useState(false);
+
+  const getLv = (data, id) => data[`lv${id}`] || [];
+  const activeData = viewCloud ? (cloudData || {}) : lbData;
+  const allEntries = levels.flatMap(lv => getLv(activeData, lv.id).map(e=>({...e, lvId:lv.id, lvName:lv.name})));
   allEntries.sort((a,b)=>a.time-b.time);
-  const entries = tab===null ? allEntries : getLv(tab);
+  const entries = tab===null ? allEntries : getLv(activeData, tab);
   const activeLevel = levels.find(l=>l.id===tab);
+  const myName = playerName || "訪客";
+
+  const loadCloud = async () => {
+    setCloudLoading(true);
+    const data = await cloudFetchAllLb();
+    setCloudData(data);
+    setCloudLoading(false);
+  };
+  const handleToggleCloud = () => {
+    const next = !viewCloud;
+    setViewCloud(next);
+    if (next && cloudData === null) loadCloud();
+  };
+
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{background:"linear-gradient(160deg,#051e34,#0a4a72)",borderRadius:20,width:"100%",maxWidth:460,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",border:"1px solid rgba(96,200,255,0.25)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",fontFamily:"'Noto Sans TC','PingFang TC',sans-serif",color:"#fff"}}>
-        <div style={{padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid rgba(255,255,255,0.1)"}}>
-          <span style={{fontWeight:900,fontSize:16}}>🏆 排行榜{activeLevel?` — 關卡${activeLevel.id} ${activeLevel.name}`:""}</span>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.6)",fontSize:22,cursor:"pointer",lineHeight:1}}>✕</button>
+        <div style={{padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid rgba(255,255,255,0.1)",gap:8}}>
+          <span style={{fontWeight:900,fontSize:15,flex:1,minWidth:0}}>🏆 排行榜{activeLevel?` — 關卡${activeLevel.id} ${activeLevel.name}`:""}</span>
+          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+            {CLOUD_DB_URL && (
+              <button onClick={handleToggleCloud} style={{background:viewCloud?"rgba(96,200,255,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${viewCloud?"rgba(96,200,255,0.5)":"rgba(255,255,255,0.2)"}`,borderRadius:14,padding:"3px 10px",color:"#fff",fontSize:11,cursor:"pointer",fontWeight:viewCloud?700:400}}>
+                {cloudLoading ? "⏳ 載入中" : viewCloud ? "☁️ 雲端" : "📱 本機"}
+              </button>
+            )}
+            {viewCloud && !cloudLoading && (
+              <button onClick={loadCloud} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:14,padding:"3px 8px",color:"#adf",fontSize:11,cursor:"pointer"}}>🔄</button>
+            )}
+            <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.6)",fontSize:22,cursor:"pointer",lineHeight:1}}>✕</button>
+          </div>
         </div>
+        {viewCloud && !CLOUD_DB_URL && (
+          <div style={{padding:"8px 14px",background:"rgba(250,204,21,0.1)",borderBottom:"1px solid rgba(250,204,21,0.2)",fontSize:11,color:"#fbbf24",textAlign:"center"}}>
+            ⚠️ 尚未設定雲端資料庫，請聯絡管理員
+          </div>
+        )}
         <div style={{display:"flex",gap:5,padding:"8px 10px",overflowX:"auto",borderBottom:"1px solid rgba(255,255,255,0.08)",flexShrink:0}}>
           <button onClick={()=>setTab(null)} style={{padding:"4px 12px",borderRadius:20,border:"none",cursor:"pointer",background:tab===null?"#22c55e":"rgba(255,255,255,0.1)",color:"#fff",fontSize:11,flexShrink:0,fontWeight:tab===null?700:400}}>全部</button>
           {levels.map(lv=>(
@@ -572,14 +645,17 @@ function LeaderboardModal({ lbData, levels, initLevel, onClose }) {
           ))}
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"10px 12px 18px"}}>
-          {entries.length===0 ? (
-            <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",padding:32,fontSize:13}}>還沒有紀錄，快去挑戰！⛵</div>
+          {cloudLoading ? (
+            <div style={{textAlign:"center",color:"rgba(255,255,255,0.5)",padding:40,fontSize:13}}>⏳ 正在讀取雲端排名…</div>
+          ) : entries.length===0 ? (
+            <div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",padding:32,fontSize:13}}>{viewCloud?"雲端還沒有紀錄，快去挑戰！⛵":"還沒有紀錄，快去挑戰！⛵"}</div>
           ) : entries.map((e,i)=>{
             const medal=["🥇","🥈","🥉"][i];
+            const isMe = e.name === myName;
             return (
-              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,background:i===0?"rgba(250,204,21,0.12)":i<3?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.02)",marginBottom:3,border:i===0?"1px solid rgba(250,204,21,0.25)":"1px solid transparent"}}>
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,background:isMe?"rgba(34,197,94,0.18)":i===0?"rgba(250,204,21,0.12)":i<3?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.02)",marginBottom:3,border:isMe?"1px solid rgba(34,197,94,0.45)":i===0?"1px solid rgba(250,204,21,0.25)":"1px solid transparent"}}>
                 <span style={{width:24,textAlign:"center",fontSize:i<3?16:12,color:["#facc15","#cbd5e1","#b45309"][i]||"rgba(255,255,255,0.4)",flexShrink:0}}>{medal||i+1}</span>
-                <span style={{flex:1,fontWeight:i<3?700:400,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}</span>
+                <span style={{flex:1,fontWeight:isMe||i<3?700:400,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:isMe?"#86efac":"#fff"}}>{e.name}{isMe?" 👈":""}</span>
                 {tab===null&&<span style={{fontSize:10,color:"#7ed6ff",flexShrink:0,background:"rgba(96,200,255,0.12)",borderRadius:8,padding:"1px 6px"}}>關{e.lvId}</span>}
                 <span style={{fontSize:14,fontVariantNumeric:"tabular-nums",color:i===0?"#facc15":"#fff",fontWeight:600,flexShrink:0}}>{fmtTime(e.time)}</span>
                 <span style={{fontSize:9,color:"rgba(255,255,255,0.3)",flexShrink:0}}>{e.date}</span>
@@ -620,7 +696,7 @@ export default function OPSailboatGame() {
   const playerNameRef = useRef(playerName);
   useEffect(()=>{ playerNameRef.current=playerName; },[playerName]);
 
-  const selectedCoach = COACH_LIST[0]; // 固定黑熊教練
+  const selectedCoach = COACH_LIST[0]; // 固定灰熊教練
   const selectedCoachRef = useRef(COACH_LIST[0]);
   const coachTipsRef = useRef(null);
   useEffect(()=>{
@@ -630,13 +706,13 @@ export default function OPSailboatGame() {
   },[]);
 
   const saveLbRecord = useCallback((name, lvId, time)=>{
+    const pName = name || "訪客";
+    cloudSaveLb(lvId, pName, time); // fire-and-forget cloud save
     setLbData(prev=>{
       const key=`lv${lvId}`;
-      const pName=name||"訪客";
       const list=[...(prev[key]||[])];
       const existing=list.findIndex(e=>e.name===pName);
       if(existing>=0){
-        // only update if new time is better
         if(time<list[existing].time) list[existing]={name:pName,time,date:new Date().toLocaleDateString("zh-TW")};
       } else {
         list.push({name:pName,time,date:new Date().toLocaleDateString("zh-TW")});
@@ -897,7 +973,7 @@ export default function OPSailboatGame() {
         <button onClick={()=>{setLbLevel(null);setShowLb(true);}} style={{background:"rgba(250,204,21,0.18)",border:"1px solid rgba(250,204,21,0.35)",borderRadius:20,padding:"4px 12px",color:"#facc15",fontSize:12,cursor:"pointer",fontWeight:700,flexShrink:0}}>🏆 排行榜</button>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
-        <span style={{fontSize:22}}>🐻</span><span style={{fontSize:13}}>黑熊教練語音</span>
+        <span style={{fontSize:22}}>🐻</span><span style={{fontSize:13}}>灰熊教練語音</span>
         <button onClick={()=>setCoachOn(p=>!p)} style={{width:46,height:24,borderRadius:12,border:"none",cursor:"pointer",background:coachOn?"#22c55e":"#555",transition:"background 0.2s",position:"relative"}}>
           <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:coachOn?25:3,transition:"left 0.2s"}}/>
         </button>
@@ -927,7 +1003,7 @@ export default function OPSailboatGame() {
         <div style={{marginTop:2}}>📱 右搖桿：上推收帆，下拉放帆</div>
         <div style={{marginTop:2,opacity:0.7}}>⌨️ ← → 轉舵 ｜ ↑ ↓ 調帆角</div>
       </div>
-      {showLb&&<LeaderboardModal lbData={lbData} levels={LEVELS} initLevel={lbLevel} onClose={()=>setShowLb(false)}/>}
+      {showLb&&<LeaderboardModal lbData={lbData} levels={LEVELS} initLevel={lbLevel} onClose={()=>setShowLb(false)} playerName={playerName}/>}
     </div>
   );
 
@@ -979,7 +1055,7 @@ export default function OPSailboatGame() {
         {levelIdx<LEVELS.length-1&&<button onClick={()=>{const n=levelIdx+1;setLevelIdx(n);startLevel(n);}} style={{background:"#22c55e",border:"none",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>下一關 ➜</button>}
         <button onClick={()=>setGameState("menu")} style={{background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>🏠 選關</button>
       </div>
-      {showLb&&<LeaderboardModal lbData={lbData} levels={LEVELS} initLevel={lbLevel} onClose={()=>setShowLb(false)}/>}
+      {showLb&&<LeaderboardModal lbData={lbData} levels={LEVELS} initLevel={lbLevel} onClose={()=>setShowLb(false)} playerName={playerName}/>}
     </div>
   ); }
 
@@ -1043,7 +1119,7 @@ export default function OPSailboatGame() {
           }}/>
         )}
 
-        {/* ── 黑熊教練 — 右下角 ── */}
+        {/* ── 灰熊教練 — 右下角 ── */}
         {bearVisible && coachOn && (
           <div style={{
             position:"absolute", bottom:12, right:10,
