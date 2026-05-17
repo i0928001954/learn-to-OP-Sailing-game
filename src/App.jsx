@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.6";
+const VERSION = "v1.7";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard4";
@@ -38,29 +38,17 @@ const LEVELS = [
   { id:8, name:"全能挑戰",   windDir:0,   windSpeed:12, marks:[{x:150,y:580,label:"左標"},{x:650,y:580,label:"右標"},{x:400,y:80,label:"終點"}], startPos:{x:400,y:350}, startHeading:180, tip:"逆風、側風、順風全都要！" },
 ];
 
-const BEAR_TIPS = {
-  noGoZone:  {voice: true, text: ["這方向頂風，你的帆在飄了！","進死角囉！換個角度！","不可以正對風向喔！"]},
-  sailTooIn: {voice: true, text: ["帆再放多一點！","帆繩多放一點！","帆縮那麼緊，船飛不起來啦！"]},
-  sailTooOut:{voice: true, text: ["帆放那麼開，是在晾衣服嗎？","帆都快飛走了！快收一點！","帆角太大，風都跑光了！收！"]},
-  goodSpeed: {voice: true, text: ["很好喔！速度有出來了","開的很好哦！速度很快耶"]},
-  slowSpeed: {voice: true, text: ["帆在飄了！","動起來！老師我看了很著急！"]},
-nearMark:  {voice: true, text: ["那個浮標！繞過去！","快到了！眼睛放亮！","目標在眼前，漂亮繞過去！"]},
-  tacking:   {voice: true, text: ["換舷！帆跟著換邊！","Z字形走法，這才是帆船精髓！","漂亮轉彎！帆調好！"]},
-  finish:    {voice: true, text: ["開得好！教練請你吃鬆餅！"]},
-  start:     {voice: true, text: ["出發！讓風看看你多厲害！","趕快下水吧！快點現在風很好哦！","年輕人，展示你的本事！走！"]},
-};
-function getBearTip(cat) {
-  const tips=BEAR_TIPS[cat];
-  const idx=Math.floor(Math.random()*tips.text.length);
-  return {voice:tips.voice, text:tips.text[idx], idx};
-}
+const COACH_LIST = [
+  { id:"bear",     name:"黑熊教練", emoji:"🐻",     description:"幽默搞笑" },
+  { id:"pengzhou", name:"鵬洲教練", emoji:"👨‍✈️", description:"親切認真" },
+];
 
 // Shared audio element — reuse to avoid overlapping voices
 let _bearAudio = null;
 function _stopBearAudio() { if(_bearAudio){ _bearAudio.pause(); _bearAudio.currentTime=0; } }
 
 let voicesLoaded = false;
-function speakBear(cat, idx, text, shouldSpeak) {
+function speakBear(coachId, cat, idx, text, shouldSpeak) {
   if (!shouldSpeak) return;
   _stopBearAudio();
 
@@ -85,7 +73,7 @@ function speakBear(cat, idx, text, shouldSpeak) {
   }
 
   // Try pre-recorded MP3 first; fall back to TTS on any failure
-  const audio = new Audio(`/audio/${cat}_${idx}.mp3`);
+  const audio = new Audio(`/audio/${coachId}/${cat}_${idx}.mp3`);
   audio.volume = 1;
   _bearAudio = audio;
   audio.onerror = useTTS;
@@ -583,6 +571,16 @@ export default function OPSailboatGame() {
   const playerNameRef = useRef(playerName);
   useEffect(()=>{ playerNameRef.current=playerName; },[playerName]);
 
+  const [selectedCoach, setSelectedCoach] = useState(COACH_LIST[0]);
+  const selectedCoachRef = useRef(COACH_LIST[0]);
+  useEffect(()=>{ selectedCoachRef.current=selectedCoach; },[selectedCoach]);
+  const coachTipsRef = useRef(null);
+  useEffect(()=>{
+    fetch(`/coaches/${selectedCoach.id}.json`)
+      .then(r=>r.json()).then(d=>{ coachTipsRef.current=d; })
+      .catch(()=>{ coachTipsRef.current=null; });
+  },[selectedCoach]);
+
   const saveLbRecord = useCallback((name, lvId, time)=>{
     setLbData(prev=>{
       const key=`lv${lvId}`;
@@ -617,8 +615,13 @@ export default function OPSailboatGame() {
     if(!coachOnRef.current) return;
     if(lastBearCatRef.current===cat) return;
     lastBearCatRef.current=cat;
-    const tip=getBearTip(cat);
-    setBearMsg(tip.text); setBearVisible(true); speakBear(cat, tip.idx, tip.text, tip.voice);
+    const tips=coachTipsRef.current;
+    if(!tips||!tips[cat]) return;
+    const catTips=tips[cat];
+    const idx=Math.floor(Math.random()*catTips.text.length);
+    const text=catTips.text[idx];
+    setBearMsg(text); setBearVisible(true);
+    speakBear(selectedCoachRef.current.id, cat, idx, text, catTips.voice);
     if(bearTimerRef.current) clearTimeout(bearTimerRef.current);
     bearTimerRef.current=setTimeout(()=>{ setBearVisible(false); lastBearCatRef.current=""; },4000);
   },[]);
@@ -820,8 +823,8 @@ export default function OPSailboatGame() {
   if(gameState==="menu") return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#051e34 0%,#0a4a72 55%,#0b6daa 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Noto Sans TC','PingFang TC',sans-serif",color:"#fff",padding:"20px",userSelect:"none"}}>
       <div style={{fontSize:58}}>⛵</div>
-      <h1 style={{fontSize:"clamp(20px,5vw,34px)",fontWeight:900,letterSpacing:2,margin:"6px 0 4px",background:"linear-gradient(90deg,#fff,#7ed6ff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>OP 小帆船學習遊戲</h1>
-      <p style={{color:"#7ed6ff",fontSize:13,margin:"0 0 6px"}}>掌握風帆，成為海上飛人！</p>
+      <h1 style={{fontSize:"clamp(20px,5vw,34px)",fontWeight:900,letterSpacing:2,margin:"6px 0 4px",background:"linear-gradient(90deg,#fff,#7ed6ff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>慈心快樂帆船社</h1>
+      <p style={{color:"#7ed6ff",fontSize:13,margin:"0 0 6px"}}>(初階練習)</p>
       <p style={{color:"rgba(126,214,255,0.5)",fontSize:10,margin:"0 0 14px",letterSpacing:1}}>{VERSION} · 更新：{LAST_UPDATED}</p>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
         <span style={{fontSize:18}}>👤</span>
@@ -830,8 +833,23 @@ export default function OPSailboatGame() {
           style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 12px",color:"#fff",fontSize:13,outline:"none",width:120,textAlign:"center"}}/>
         <button onClick={()=>{setLbLevel(null);setShowLb(true);}} style={{background:"rgba(250,204,21,0.18)",border:"1px solid rgba(250,204,21,0.35)",borderRadius:20,padding:"4px 12px",color:"#facc15",fontSize:12,cursor:"pointer",fontWeight:700,flexShrink:0}}>🏆 排行榜</button>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
-        <span style={{fontSize:22}}>🐻</span><span style={{fontSize:13}}>黑熊教練語音</span>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px",flexWrap:"wrap",justifyContent:"center"}}>
+        <span style={{fontSize:22}}>{selectedCoach.emoji}</span>
+        <select
+          value={selectedCoach.id}
+          onChange={e=>{
+            const coach=COACH_LIST.find(c=>c.id===e.target.value);
+            if(coach) setSelectedCoach(coach);
+          }}
+          style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"4px 10px",color:"#fff",fontSize:13,cursor:"pointer",outline:"none"}}
+        >
+          {COACH_LIST.map(c=>(
+            <option key={c.id} value={c.id} style={{background:"#0a4a72",color:"#fff"}}>
+              {c.emoji} {c.name}（{c.description}）
+            </option>
+          ))}
+        </select>
+        <span style={{fontSize:13}}>語音</span>
         <button onClick={()=>setCoachOn(p=>!p)} style={{width:46,height:24,borderRadius:12,border:"none",cursor:"pointer",background:coachOn?"#22c55e":"#555",transition:"background 0.2s",position:"relative"}}>
           <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:coachOn?25:3,transition:"left 0.2s"}}/>
         </button>
@@ -898,7 +916,16 @@ export default function OPSailboatGame() {
           <button onClick={()=>{setLbLevel(level.id);setShowLb(true);}} style={{marginTop:6,width:"100%",background:"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#adf",padding:"5px 0",fontSize:11,cursor:"pointer"}}>查看完整排行榜</button>
         </div>
       )}
-      <div style={{fontSize:14,marginBottom:16,color:"#e2f4ff",maxWidth:300,textAlign:"center"}}>🐻 「{getBearTip("finish").text}」</div>
+      {(() => {
+        const tips = coachTipsRef.current;
+        const finishTips = tips && tips.finish ? tips.finish.text : ["完成了！"];
+        const text = finishTips[Math.floor(Math.random() * finishTips.length)];
+        return (
+          <div style={{fontSize:14,marginBottom:16,color:"#e2f4ff",maxWidth:300,textAlign:"center"}}>
+            {selectedCoach.emoji} 「{text}」
+          </div>
+        );
+      })()}
       <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
         <button onClick={()=>startLevel(levelIdx)} style={{background:"#f97316",border:"none",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>🔄 再玩一次</button>
         {levelIdx<LEVELS.length-1&&<button onClick={()=>{const n=levelIdx+1;setLevelIdx(n);startLevel(n);}} style={{background:"#22c55e",border:"none",borderRadius:30,padding:"11px 22px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>下一關 ➜</button>}
@@ -932,7 +959,7 @@ export default function OPSailboatGame() {
           <button onClick={()=>setHeadUp(p=>!p)} style={{background:headUp?"rgba(96,200,255,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}} title="切換視角">
             {headUp?"⬆️ 船首":"🗺 北方"}
           </button>
-          <button onClick={()=>setCoachOn(p=>!p)} style={{background:coachOn?"rgba(34,197,94,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>🐻 {coachOn?"ON":"OFF"}</button>
+          <button onClick={()=>setCoachOn(p=>!p)} style={{background:coachOn?"rgba(34,197,94,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>{selectedCoach.emoji} {coachOn?"ON":"OFF"}</button>
         </div>
       </div>
 
@@ -982,7 +1009,7 @@ export default function OPSailboatGame() {
             animation:"bearIn 0.22s ease", zIndex:10,
             pointerEvents:"none",
           }}>
-            <span style={{fontSize:24,flexShrink:0,lineHeight:1}}>🐻</span>
+            <span style={{fontSize:24,flexShrink:0,lineHeight:1}}>{selectedCoach.emoji}</span>
             <span style={{lineHeight:1.45}}>{bearMsg}</span>
           </div>
         )}
