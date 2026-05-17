@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.7";
+const VERSION = "v1.8";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard4";
@@ -45,7 +45,7 @@ const COACH_LIST = [
 
 // ── Backend switch: "tts" = browser TTS, "mp3" = pre-recorded files ──────────
 // Change to "mp3" after running scripts/gen_audio.py to generate public/audio/
-const AUDIO_MODE = "tts";
+const AUDIO_MODE = "mp3";
 
 let _bearAudio = null;
 function _stopBearAudio() {
@@ -587,7 +587,15 @@ export default function OPSailboatGame() {
   const saveLbRecord = useCallback((name, lvId, time)=>{
     setLbData(prev=>{
       const key=`lv${lvId}`;
-      const list=[...(prev[key]||[]),{name:name||"訪客",time,date:new Date().toLocaleDateString("zh-TW")}];
+      const pName=name||"訪客";
+      const list=[...(prev[key]||[])];
+      const existing=list.findIndex(e=>e.name===pName);
+      if(existing>=0){
+        // only update if new time is better
+        if(time<list[existing].time) list[existing]={name:pName,time,date:new Date().toLocaleDateString("zh-TW")};
+      } else {
+        list.push({name:pName,time,date:new Date().toLocaleDateString("zh-TW")});
+      }
       list.sort((a,b)=>a.time-b.time);
       const next={...prev,[key]:list.slice(0,LB_MAX)};
       try{localStorage.setItem(LB_KEY,JSON.stringify(next))}catch{};
