@@ -602,9 +602,9 @@ async function cloudFetchAllLb() {
 // ─── Leaderboard modal ───────────────────────────────────────────
 function LeaderboardModal({ lbData, levels, initLevel, onClose, playerName }) {
   const [tab, setTab] = useState(initLevel ?? null);
-  const [viewCloud, setViewCloud] = useState(false);
+  const [viewCloud, setViewCloud] = useState(!!CLOUD_DB_URL);
   const [cloudData, setCloudData] = useState(null);
-  const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudLoading, setCloudLoading] = useState(!!CLOUD_DB_URL);
 
   const getLv = (data, id) => data[`lv${id}`] || [];
   const activeData = viewCloud ? (cloudData || {}) : lbData;
@@ -620,6 +620,8 @@ function LeaderboardModal({ lbData, levels, initLevel, onClose, playerName }) {
     setCloudData(data);
     setCloudLoading(false);
   };
+  // Auto-load cloud data on first open when cloud is configured
+  useEffect(() => { if (CLOUD_DB_URL) loadCloud(); }, []);
   const handleToggleCloud = () => {
     const next = !viewCloud;
     setViewCloud(next);
