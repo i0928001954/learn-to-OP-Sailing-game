@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.9";
+const VERSION = "v2.0";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard5";
@@ -334,10 +334,13 @@ function drawOcean(ctx, t, speed) {
   }
 }
 
-function drawWindArrows(ctx, windDir) {
-  ctx.save(); ctx.globalAlpha = 0.12; ctx.strokeStyle="#fff"; ctx.lineWidth=1.5;
-  for (let gx=70; gx<CANVAS_W; gx+=130)
-    for (let gy=70; gy<CANVAS_H; gy+=130) {
+function drawWindArrows(ctx, windDir, cx, cy) {
+  const STEP=130, RANGE=600;
+  const x0=Math.floor((cx-RANGE)/STEP)*STEP;
+  const y0=Math.floor((cy-RANGE)/STEP)*STEP;
+  ctx.save(); ctx.globalAlpha=0.12; ctx.strokeStyle="#fff"; ctx.lineWidth=1.5;
+  for (let gx=x0; gx<=cx+RANGE; gx+=STEP)
+    for (let gy=y0; gy<=cy+RANGE; gy+=STEP) {
       ctx.save(); ctx.translate(gx,gy); ctx.rotate(windDir*Math.PI/180);
       ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(0,14); ctx.moveTo(0,-14); ctx.lineTo(-5,-4); ctx.moveTo(0,-14); ctx.lineTo(5,-4);
       ctx.stroke(); ctx.restore();
@@ -712,8 +715,8 @@ export default function OPSailboatGame() {
       const turnRate=rudderRef.current*(g.speed*36+18);
       g.heading=(g.heading+turnRate*dt+360)%360;
       const rad=g.heading*Math.PI/180;
-      g.x=Math.max(15,Math.min(CANVAS_W-15,g.x+Math.sin(rad)*g.speed*dt*60));
-      g.y=Math.max(15,Math.min(CANVAS_H-15,g.y-Math.cos(rad)*g.speed*dt*60));
+      g.x=Math.max(-3000,Math.min(CANVAS_W+3000,g.x+Math.sin(rad)*g.speed*dt*60));
+      g.y=Math.max(-3000,Math.min(CANVAS_H+3000,g.y-Math.cos(rad)*g.speed*dt*60));
 
       if(g.trail.length===0||Math.hypot(g.x-g.trail[0].x,g.y-g.trail[0].y)>10){
         g.trail.unshift({x:g.x,y:g.y}); if(g.trail.length>80) g.trail.pop();
@@ -738,6 +741,7 @@ export default function OPSailboatGame() {
       else if(g.speed>targetSpeed*0.85&&targetSpeed>0.5) showBear("goodSpeed");
       else if(targetSpeed>0.3&&g.speed<targetSpeed*0.4&&g.elapsed>3) showBear("slowSpeed");
       if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)<110) showBear("nearMark");
+      if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)>800) showBear("tooFar");
 
       const ratio=Math.min(g.speed/MAX_SPEED,1);
       setElapsed(g.elapsed); setSailAngleDisplay(Math.round(g.maxSailAngle));
@@ -757,7 +761,7 @@ export default function OPSailboatGame() {
         ctx.translate(-g.x, -g.y);
       }
 
-      drawWindArrows(ctx, lv.windDir);
+      drawWindArrows(ctx, lv.windDir, g.x, g.y);
 
       // Trail (world coords — correct under both transforms)
       for(let i=0;i<g.trail.length-1;i++){
