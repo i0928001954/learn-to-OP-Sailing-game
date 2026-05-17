@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v2.0";
+const VERSION = "v2.1";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard5";
@@ -28,14 +28,14 @@ function optimalSailAngle(a) {
 }
 
 const LEVELS = [
-  { id:1, name:"順風衝刺",    windDir:0,   windSpeed:9, marks:[{x:400,y:80,label:"終點"}],                                                startPos:{x:400,y:620}, startHeading:0,   tip:"順風時把帆放開！" },
-  { id:2, name:"側風橫渡",    windDir:270, windSpeed:9, marks:[{x:720,y:350,label:"終點"}],                                               startPos:{x:80,y:350},  startHeading:90,  tip:"側風時帆角約45°！" },
-  { id:3, name:"迎風搶風",    windDir:0,   windSpeed:9, marks:[{x:400,y:70,label:"上風標"}],                                              startPos:{x:400,y:630}, startHeading:315, tip:"逆風走Z字形（Tacking）！" },
-  { id:4, name:"繞下風標",    windDir:0,   windSpeed:9, marks:[{x:400,y:600,label:"下風標"},{x:400,y:90,label:"終點"}],                  startPos:{x:400,y:90},  startHeading:180, tip:"繞過兩個浮標到終點！" },
-  { id:5, name:"三角繞標賽",  windDir:350, windSpeed:10, marks:[{x:400,y:80,label:"上風標"},{x:680,y:530,label:"側風標"},{x:120,y:530,label:"終點"}], startPos:{x:400,y:630}, startHeading:5, tip:"順序經過三個浮標！" },
-  { id:6, name:"側風蛇行",   windDir:270, windSpeed:11, marks:[{x:680,y:100,label:"標1"},{x:680,y:580,label:"標2"},{x:400,y:350,label:"終點"}], startPos:{x:80,y:350}, startHeading:0, tip:"帆角45度，側風衝刺！" },
-  { id:7, name:"逆風競技",   windDir:5,   windSpeed:11, marks:[{x:150,y:350,label:"標A"},{x:650,y:200,label:"標B"},{x:350,y:80,label:"終點"}], startPos:{x:400,y:630}, startHeading:310, tip:"逆風換舷連環技！" },
-  { id:8, name:"全能挑戰",   windDir:0,   windSpeed:12, marks:[{x:150,y:580,label:"左標"},{x:650,y:580,label:"右標"},{x:400,y:80,label:"終點"}], startPos:{x:400,y:350}, startHeading:180, tip:"逆風、側風、順風全都要！" },
+  { id:1, name:"順風衝刺",    windDir:0,   windSpeed:9,  music:0, marks:[{x:400,y:80,label:"終點"}],                                                startPos:{x:400,y:620}, startHeading:0,   tip:"順風時把帆放開！" },
+  { id:2, name:"側風橫渡",    windDir:270, windSpeed:9,  music:1, marks:[{x:720,y:350,label:"終點"}],                                               startPos:{x:80,y:350},  startHeading:90,  tip:"側風時帆角約45°！" },
+  { id:3, name:"迎風搶風",    windDir:0,   windSpeed:9,  music:2, marks:[{x:400,y:70,label:"上風標"}],                                              startPos:{x:400,y:630}, startHeading:315, tip:"逆風走Z字形（Tacking）！" },
+  { id:4, name:"繞下風標",    windDir:0,   windSpeed:9,  music:0, marks:[{x:400,y:600,label:"下風標"},{x:400,y:90,label:"終點"}],                  startPos:{x:400,y:90},  startHeading:180, tip:"繞過兩個浮標到終點！" },
+  { id:5, name:"三角繞標賽",  windDir:350, windSpeed:10, music:3, marks:[{x:400,y:80,label:"上風標"},{x:680,y:530,label:"側風標"},{x:120,y:530,label:"終點"}], startPos:{x:400,y:630}, startHeading:5, tip:"順序經過三個浮標！" },
+  { id:6, name:"側風蛇行",    windDir:270, windSpeed:11, music:1, marks:[{x:680,y:100,label:"標1"},{x:680,y:580,label:"標2"},{x:400,y:350,label:"終點"}], startPos:{x:80,y:350}, startHeading:0, tip:"帆角45度，側風衝刺！" },
+  { id:7, name:"逆風競技",    windDir:5,   windSpeed:11, music:2, marks:[{x:150,y:350,label:"標A"},{x:650,y:200,label:"標B"},{x:350,y:80,label:"終點"}], startPos:{x:400,y:630}, startHeading:310, tip:"逆風換舷連環技！" },
+  { id:8, name:"全能挑戰",    windDir:0,   windSpeed:12, music:3, marks:[{x:150,y:580,label:"左標"},{x:650,y:580,label:"右標"},{x:400,y:80,label:"終點"}], startPos:{x:400,y:350}, startHeading:180, tip:"逆風、側風、順風全都要！" },
 ];
 
 const COACH_LIST = [
@@ -111,42 +111,65 @@ function unlockAudio() {
   }
 }
 
-// ─── Background music (Web Audio API, no external files needed) ──
+// ─── Background music — 4 themes, Web Audio API ──────────────────
+// theme 0: 海風輕拂 (C major, gentle)   levels 1,4
+// theme 1: 側風飛翔 (D major, rhythmic)  levels 2,6
+// theme 2: 逆風搏擊 (A minor, focused)   levels 3,7
+// theme 3: 全速前進 (E minor, exciting)  levels 5,8
+const BG_THEMES = [
+  { beat:0.45, gain:0.12,
+    bass:[[65.41,0.50],[98.00,0.22],[130.81,0.15]],
+    notes:[523.25,659.25,783.99,659.25,523.25,659.25,783.99,880.00,783.99,659.25,523.25,392.00,523.25,659.25,523.25,392.00] },
+  { beat:0.38, gain:0.12,
+    bass:[[73.42,0.48],[110.00,0.21],[146.83,0.13]],
+    notes:[587.33,739.99,880.00,739.99,587.33,493.88,587.33,739.99,880.00,987.77,880.00,739.99,587.33,493.88,369.99,293.66] },
+  { beat:0.44, gain:0.11,
+    bass:[[55.00,0.52],[82.41,0.24],[110.00,0.15]],
+    notes:[440.00,523.25,659.25,523.25,440.00,392.00,440.00,523.25,659.25,783.99,659.25,523.25,440.00,392.00,329.63,220.00] },
+  { beat:0.30, gain:0.11,
+    bass:[[82.41,0.48],[123.47,0.22],[164.81,0.13]],
+    notes:[659.25,783.99,987.77,783.99,659.25,587.33,659.25,783.99,987.77,1046.50,987.77,783.99,659.25,587.33,493.88,329.63] },
+];
+
 let _bgCtx = null, _bgScheduleId = null;
 
 function stopBgMusic() {
   if (_bgScheduleId) { clearTimeout(_bgScheduleId); _bgScheduleId = null; }
-  if (_bgCtx) { _bgCtx.close().catch(()=>{}); _bgCtx = null; }
+  if (_bgCtx) { try{ _bgCtx.close(); }catch{} _bgCtx = null; }
 }
 
-function startBgMusic() {
-  if (_bgCtx) return;
+function startBgMusic(theme=0) {
+  stopBgMusic(); // always restart clean so theme change takes effect
   try {
     _bgCtx = new (window.AudioContext || window.webkitAudioContext)();
-    _bgCtx.resume().catch(()=>{});
     const ac = _bgCtx;
-    const master = ac.createGain(); master.gain.value = 0.12;
+    ac.resume().catch(()=>{});
+    // Auto-resume when browser suspends the context (tab blur / power save)
+    ac.onstatechange = () => { if (ac.state==='suspended') ac.resume().catch(()=>{}); };
+
+    const t = BG_THEMES[theme % BG_THEMES.length];
+    const master = ac.createGain(); master.gain.value = t.gain;
     master.connect(ac.destination);
-    // Bass drone: C2, G2, C3
-    [[65.4,0.5],[98.0,0.22],[130.8,0.15]].forEach(([freq,vol])=>{
+
+    t.bass.forEach(([freq,vol])=>{
       const o=ac.createOscillator(),g=ac.createGain(),f=ac.createBiquadFilter();
       o.type='sine'; o.frequency.value=freq; g.gain.value=vol;
-      f.type='lowpass'; f.frequency.value=420;
+      f.type='lowpass'; f.frequency.value=400;
       o.connect(f); f.connect(g); g.connect(master); o.start();
     });
-    // Melody: C major pentatonic, cheerful sailing theme (16 notes, looping)
-    const notes=[523.25,659.25,783.99,659.25,523.25,659.25,783.99,880.00,
-                 783.99,659.25,523.25,392.00,523.25,659.25,523.25,392.00];
-    const BEAT=0.45; let idx=0;
+
+    let ni=0;
     function tick(){
-      if(!_bgCtx) return;
+      if(ac!==_bgCtx) return; // context was replaced, this loop is dead
+      if(ac.state==='suspended'){ ac.resume().catch(()=>{}); _bgScheduleId=setTimeout(tick,300); return; }
       const now=ac.currentTime;
       const o=ac.createOscillator(),g=ac.createGain();
-      o.type='triangle'; o.frequency.value=notes[idx%notes.length];
-      g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(0.13,now+0.02);
-      g.gain.exponentialRampToValueAtTime(0.001,now+BEAT*0.85);
-      o.connect(g); g.connect(master); o.start(now); o.stop(now+BEAT);
-      idx++; _bgScheduleId=setTimeout(tick,BEAT*1000);
+      o.type='triangle'; o.frequency.value=t.notes[ni%t.notes.length];
+      g.gain.setValueAtTime(0,now);
+      g.gain.linearRampToValueAtTime(0.15,now+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,now+t.beat*0.88);
+      o.connect(g); g.connect(master); o.start(now); o.stop(now+t.beat);
+      ni++; _bgScheduleId=setTimeout(tick,t.beat*1000);
     }
     tick();
   } catch(e){ _bgCtx=null; }
@@ -632,11 +655,14 @@ export default function OPSailboatGame() {
   useEffect(()=>{ headUpRef.current=headUp; },[headUp]);
 
   const [musicOn, setMusicOn] = useState(true);
+  const musicOnRef = useRef(true);
+  useEffect(()=>{ musicOnRef.current=musicOn; },[musicOn]);
+  const currentMusicThemeRef = useRef(0);
+  // Stop music when leaving playing state; start is handled by startLevel (with correct theme)
   useEffect(()=>{
-    if(gameState==="playing" && musicOn) startBgMusic();
-    else stopBgMusic();
-    return stopBgMusic;
-  },[gameState, musicOn]);
+    if(gameState!=="playing") stopBgMusic();
+    return stopBgMusic; // also stop on unmount
+  },[gameState]);
 
   const bearTimerRef=useRef(null), animRef=useRef(null), lastBearCatRef=useRef("");
   const coachOnRef=useRef(coachOn);
@@ -662,6 +688,9 @@ export default function OPSailboatGame() {
   const startLevel = useCallback(idx=>{
     unlockAudio();
     const lv=LEVELS[idx]; const g=gameRef.current;
+    // Set theme before setGameState so music starts with correct atmosphere
+    currentMusicThemeRef.current = lv.music ?? 0;
+    if(musicOnRef.current) startBgMusic(currentMusicThemeRef.current);
     Object.assign(g,{x:lv.startPos.x,y:lv.startPos.y,heading:lv.startHeading,speed:0,maxSailAngle:45,actualSailAngle:45,sailOsc:0,angleDiff:0,currentMark:0,startTime:null,elapsed:0,finished:false,t:0,trail:[]});
     rudderRef.current=0;
     setCurrentMark(0); setElapsed(0); setSailAngleDisplay(45); setSpeedDisplay(0); setSpeedRatio(0);
@@ -974,7 +1003,7 @@ export default function OPSailboatGame() {
           ))}
         </div>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>{ const next=!musicOn; setMusicOn(next); if(next){ unlockAudio(); startBgMusic(); } else stopBgMusic(); }} style={{background:musicOn?"rgba(250,204,21,0.25)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>{musicOn?"🎵":"🔇"}</button>
+          <button onClick={()=>{ const next=!musicOn; setMusicOn(next); if(next){ unlockAudio(); startBgMusic(currentMusicThemeRef.current); } else stopBgMusic(); }} style={{background:musicOn?"rgba(250,204,21,0.25)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}}>{musicOn?"🎵":"🔇"}</button>
           <button onClick={()=>setHeadUp(p=>!p)} style={{background:headUp?"rgba(96,200,255,0.28)":"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:12}} title="切換視角">
             {headUp?"⬆️ 船首":"🗺 北方"}
           </button>
