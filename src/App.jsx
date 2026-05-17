@@ -51,13 +51,13 @@ let voicesLoaded = false;
 function speakBear(coachId, cat, idx, text, shouldSpeak) {
   if (!shouldSpeak) return;
   _stopBearAudio();
+  window.speechSynthesis.cancel(); // cancel any pending TTS
 
-  // TTS fallback — only fires once even if both onerror and catch trigger
+  // TTS fallback — only fires once
   let ttsUsed = false;
   function useTTS() {
     if (ttsUsed) return; ttsUsed = true;
     if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
     utt.lang="zh-TW"; utt.rate=0.9; utt.pitch=0.65; utt.volume=1;
     const tryVoice = () => {
@@ -76,8 +76,21 @@ function speakBear(coachId, cat, idx, text, shouldSpeak) {
   const audio = new Audio(`/audio/${coachId}/${cat}_${idx}.mp3`);
   audio.volume = 1;
   _bearAudio = audio;
-  audio.onerror = useTTS;
-  audio.play().catch(useTTS);
+
+  let audioAttempted = false;
+  audio.onerror = () => {
+    audioAttempted = true;
+    useTTS();
+  };
+
+  audio.play().then(() => {
+    audioAttempted = true;
+  }).catch(() => {
+    if (!audioAttempted) {
+      audioAttempted = true;
+      useTTS();
+    }
+  });
 }
 
 // Call once from a user-gesture handler to unlock speechSynthesis (iOS/Safari)
