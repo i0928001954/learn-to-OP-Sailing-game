@@ -4,10 +4,10 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v1.8";
+const VERSION = "v1.9";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
-const LB_KEY = "op_leaderboard4";
+const LB_KEY = "op_leaderboard5";
 const LB_MAX = 10; // max stored entries per level
 const fmtTime = s => `${Math.floor(s/60)}:${(s%60).toFixed(2).padStart(5,"0")}`;
 
@@ -48,29 +48,48 @@ const COACH_LIST = [
 const AUDIO_MODE = "mp3";
 
 let _bearAudio = null;
+let _bearBusy  = false;
+let _bearBusyTimer = null;
+
+function _freeBear() {
+  _bearBusy = false;
+  if (_bearBusyTimer) { clearTimeout(_bearBusyTimer); _bearBusyTimer = null; }
+}
+
+// Force-stop everything (e.g. on level reset / menu return)
 function _stopBearAudio() {
   if (_bearAudio) { _bearAudio.pause(); _bearAudio.currentTime = 0; _bearAudio = null; }
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  _freeBear();
 }
 
 let voicesLoaded = false;
 function speakBear(coachId, cat, idx, text, shouldSpeak) {
   if (!shouldSpeak) return;
-  _stopBearAudio(); // always stop whatever is playing first
+  if (_bearBusy) return; // let the current clip finish; drop this trigger
+
+  _bearBusy = true;
+  // Safety valve: release busy after 8 s in case onended never fires
+  if (_bearBusyTimer) clearTimeout(_bearBusyTimer);
+  _bearBusyTimer = setTimeout(_freeBear, 8000);
 
   if (AUDIO_MODE === "mp3") {
-    // ── MP3 path: play file, no TTS fallback ───────────────────────
+    // ── MP3 path ────────────────────────────────────────────────────
     const audio = new Audio(`/audio/${coachId}/${cat}_${idx}.mp3`);
     audio.volume = 1;
     _bearAudio = audio;
-    audio.play().catch(()=>{});
+    audio.onended = _freeBear;
+    audio.onerror = _freeBear;
+    audio.play().catch(_freeBear);
     return;
   }
 
-  // ── TTS path: speechSynthesis only, no MP3 ─────────────────────
-  if (!("speechSynthesis" in window)) return;
+  // ── TTS path ─────────────────────────────────────────────────────
+  if (!("speechSynthesis" in window)) { _freeBear(); return; }
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang="zh-TW"; utt.rate=0.9; utt.pitch=0.65; utt.volume=1;
+  utt.onend   = _freeBear;
+  utt.onerror = _freeBear;
   const doSpeak = () => {
     const voices = window.speechSynthesis.getVoices();
     const prefer = ["Zhiwei","Yunjian","Yunfeng","Yu-shu","Tong","Liang","Ming","Kun","Yu","Daniel"];
