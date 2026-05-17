@@ -9,9 +9,13 @@ const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard5";
 const LB_MAX = 10; // max stored entries per level
-// Set to your Firebase Realtime Database URL to enable cloud leaderboard
-// e.g. "https://your-project-default-rtdb.asia-southeast1.firebasedatabase.app"
-// Database rules must allow public read/write: { "rules": { ".read": true, ".write": true } }
+// ── Firebase Realtime Database URL ──────────────────────────────────────────
+// Setup (免費，約5分鐘):
+//   1. https://console.firebase.google.com → 新增專案 → 跳過 Analytics
+//   2. 左側 Realtime Database → 建立資料庫 → 測試模式 → 選亞洲區域
+//   3. 複製 URL（形如 https://xxx-rtdb.asia-southeast1.firebasedatabase.app）貼到下方
+//   4. 規則頁面貼上:
+//      { "rules": { "leaderboard": { ".read": true, "$l": { "$p": { ".write": true } } } } }
 const CLOUD_DB_URL = "";
 const fmtTime = s => `${Math.floor(s/60)}:${(s%60).toFixed(2).padStart(5,"0")}`;
 
@@ -555,11 +559,21 @@ function SailSlider({ value, onChange }) {
 }
 
 // ─── Cloud leaderboard helpers ───────────────────────────────────
+// Firebase key: strip chars not allowed in Realtime DB paths (.#$[]/)
+function _cloudKey(name) {
+  return (name || "anon").replace(/[.#$[\]/]/g, "_").slice(0, 60);
+}
+
 async function cloudSaveLb(lvId, name, time) {
   if (!CLOUD_DB_URL) return;
+  const key = _cloudKey(name);
+  const url = `${CLOUD_DB_URL}/leaderboard/lv${lvId}/${key}.json`;
   try {
-    await fetch(`${CLOUD_DB_URL}/leaderboard/lv${lvId}.json`, {
-      method: "POST",
+    // Only overwrite if new time is better than what's already in the cloud
+    const existing = await fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (existing && typeof existing.time === "number" && existing.time <= time) return;
+    await fetch(url, {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, time, date: new Date().toLocaleDateString("zh-TW") }),
     });
@@ -576,14 +590,10 @@ async function cloudFetchAllLb() {
     const result = {};
     for (const [lvKey, lvEntries] of Object.entries(raw)) {
       if (!lvEntries) continue;
-      const byName = {};
-      for (const entry of Object.values(lvEntries)) {
-        if (!entry?.name) continue;
-        if (!byName[entry.name] || entry.time < byName[entry.name].time) {
-          byName[entry.name] = entry;
-        }
-      }
-      result[lvKey] = Object.values(byName).sort((a, b) => a.time - b.time).slice(0, LB_MAX);
+      result[lvKey] = Object.values(lvEntries)
+        .filter(e => e?.name && typeof e.time === "number")
+        .sort((a, b) => a.time - b.time)
+        .slice(0, LB_MAX);
     }
     return result;
   } catch { return {}; }
