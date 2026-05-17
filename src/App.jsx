@@ -43,7 +43,7 @@ const LEVELS = [
 ];
 
 const COACH_LIST = [
-  { id:"bear",     name:"黑熊教練", emoji:"🐻",     description:"幽默搞笑" },
+  { id:"bear",     name:"灰熊教練", emoji:"🐻",     description:"幽默搞笑" },
   { id:"pengzhou", name:"鵬洲教練", emoji:"👨‍✈️", description:"親切認真" },
 ];
 
@@ -696,7 +696,7 @@ export default function OPSailboatGame() {
   const playerNameRef = useRef(playerName);
   useEffect(()=>{ playerNameRef.current=playerName; },[playerName]);
 
-  const selectedCoach = COACH_LIST[0]; // 固定黑熊教練
+  const selectedCoach = COACH_LIST[0]; // 固定灰熊教練
   const selectedCoachRef = useRef(COACH_LIST[0]);
   const coachTipsRef = useRef(null);
   useEffect(()=>{
@@ -973,7 +973,7 @@ export default function OPSailboatGame() {
         <button onClick={()=>{setLbLevel(null);setShowLb(true);}} style={{background:"rgba(250,204,21,0.18)",border:"1px solid rgba(250,204,21,0.35)",borderRadius:20,padding:"4px 12px",color:"#facc15",fontSize:12,cursor:"pointer",fontWeight:700,flexShrink:0}}>🏆 排行榜</button>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,background:"rgba(255,255,255,0.08)",borderRadius:30,padding:"8px 18px"}}>
-        <span style={{fontSize:22}}>🐻</span><span style={{fontSize:13}}>黑熊教練語音</span>
+        <span style={{fontSize:22}}>🐻</span><span style={{fontSize:13}}>灰熊教練語音</span>
         <button onClick={()=>setCoachOn(p=>!p)} style={{width:46,height:24,borderRadius:12,border:"none",cursor:"pointer",background:coachOn?"#22c55e":"#555",transition:"background 0.2s",position:"relative"}}>
           <div style={{width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:coachOn?25:3,transition:"left 0.2s"}}/>
         </button>
@@ -1119,7 +1119,7 @@ export default function OPSailboatGame() {
           }}/>
         )}
 
-        {/* ── 黑熊教練 — 右下角 ── */}
+        {/* ── 灰熊教練 — 右下角 ── */}
         {bearVisible && coachOn && (
           <div style={{
             position:"absolute", bottom:12, right:10,
