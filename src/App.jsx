@@ -4,7 +4,7 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 30;
 const MARK_RADIUS = 35;
-const VERSION = "v0.8";
+const VERSION = "v1.6";
 const LAST_UPDATED = "2026-05-17";
 const MAX_SPEED = 3.0; // knots display max
 const LB_KEY = "op_leaderboard4";
@@ -45,7 +45,10 @@ const COACH_LIST = [
 
 // Shared audio element — reuse to avoid overlapping voices
 let _bearAudio = null;
-function _stopBearAudio() { if(_bearAudio){ _bearAudio.pause(); _bearAudio.currentTime=0; } }
+function _stopBearAudio() {
+  if (_bearAudio) { _bearAudio.pause(); _bearAudio.currentTime = 0; }
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+}
 
 let voicesLoaded = false;
 function speakBear(coachId, cat, idx, text, shouldSpeak) {
@@ -68,8 +71,10 @@ function speakBear(coachId, cat, idx, text, shouldSpeak) {
       if (maleZh) utt.voice=maleZh; else if (anyZh) utt.voice=anyZh;
       window.speechSynthesis.speak(utt);
     };
-    if (!voicesLoaded) { window.speechSynthesis.onvoiceschanged=()=>{voicesLoaded=true;tryVoice();}; tryVoice(); }
-    else tryVoice();
+    // Only call tryVoice once: immediately if voices ready, otherwise wait for the event
+    const voices = window.speechSynthesis.getVoices();
+    if (voicesLoaded || voices.length > 0) { voicesLoaded = true; tryVoice(); }
+    else { window.speechSynthesis.onvoiceschanged = () => { voicesLoaded = true; tryVoice(); }; }
   }
 
   // Try pre-recorded MP3 first; fall back to TTS on any failure
