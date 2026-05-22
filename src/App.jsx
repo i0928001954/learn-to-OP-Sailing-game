@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 const CANVAS_W = 800;
 const CANVAS_H = 700;
-const BOAT_SIZE = 30;
+const BOAT_SIZE = 40;
 const MARK_RADIUS = 35;
 const VERSION = "v2.2";
 const LAST_UPDATED = "2026-05-17";
@@ -1008,7 +1008,7 @@ export default function OPSailboatGame() {
         if (dist > 5) {
           const nx = sx / dist, ny = sy / dist;
           const pulse = 0.65 + 0.35 * Math.sin(g.t * 0.12); // gentle pulse
-          const R = 52; // ring radius around boat
+          const R = 62; // ring radius around boat
           const ax = CANVAS_W/2 + nx * R, ay = CANVAS_H/2 + ny * R;
           const angle = Math.atan2(nx, -ny);
           ctx.save();
@@ -1016,15 +1016,15 @@ export default function OPSailboatGame() {
           ctx.translate(ax, ay);
           ctx.rotate(angle);
           // Arrowhead
-          ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(8,6); ctx.lineTo(-8,6); ctx.closePath();
+          ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(11,8); ctx.lineTo(-11,8); ctx.closePath();
           ctx.fillStyle = "#facc15";
-          ctx.shadowColor = "#facc15"; ctx.shadowBlur = 12;
+          ctx.shadowColor = "#facc15"; ctx.shadowBlur = 16;
           ctx.fill();
           // Distance label
           ctx.shadowBlur = 0; ctx.rotate(-angle);
-          ctx.fillStyle = "#fff"; ctx.font = "bold 9px sans-serif";
+          ctx.fillStyle = "#fff"; ctx.font = "bold 11px sans-serif";
           ctx.textAlign = "center"; ctx.textBaseline = "middle";
-          ctx.fillText(Math.round(dist) + "m", 0, 20);
+          ctx.fillText(Math.round(dist) + "m", 0, 26);
           ctx.restore();
         }
       }
