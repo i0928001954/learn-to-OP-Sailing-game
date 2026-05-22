@@ -317,6 +317,59 @@ function updateParticles(ctx) {
   }
 }
 
+// ─── Finish celebration fireworks ─────────────────────────────────
+const finishParticles = [];
+function emitFinishParticles(cx, cy, count=60) {
+  const cols=["#facc15","#f97316","#22c55e","#60a5fa","#a78bfa","#f472b6","#fff","#fde68a","#6ee7b7"];
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2, s=2+Math.random()*7;
+    finishParticles.push({
+      x:cx+(Math.random()-0.5)*24, y:cy+(Math.random()-0.5)*24,
+      vx:Math.cos(a)*s, vy:Math.sin(a)*s-2.5,
+      life:1, decay:0.007+Math.random()*0.012,
+      color:cols[Math.floor(Math.random()*cols.length)],
+      size:3+Math.random()*7, grav:0.06,
+    });
+  }
+}
+function updateFinishParticles(ctx) {
+  for(let i=finishParticles.length-1;i>=0;i--){
+    const p=finishParticles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=p.grav; p.life-=p.decay;
+    if(p.life<=0){finishParticles.splice(i,1);continue;}
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);
+    ctx.fillStyle=p.color+Math.round(p.life*220).toString(16).padStart(2,"0");
+    ctx.fill();
+  }
+}
+function drawFinishOverlay(ctx, finishTime, t, isRecord) {
+  ctx.save();
+  // Radial vignette
+  const vg=ctx.createRadialGradient(CANVAS_W/2,CANVAS_H/2,70,CANVAS_W/2,CANVAS_H/2,CANVAS_W*0.75);
+  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.6)");
+  ctx.fillStyle=vg; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  // "完成！" pulsing
+  const pulse=1+0.07*Math.sin(t*0.18);
+  ctx.save();
+  ctx.translate(CANVAS_W/2,CANVAS_H/2-72); ctx.scale(pulse,pulse);
+  ctx.font="bold 68px 'Noto Sans TC',sans-serif";
+  ctx.shadowColor=isRecord?"#facc15":"#22c55e"; ctx.shadowBlur=44;
+  ctx.fillStyle=isRecord?"#facc15":"#22c55e";
+  ctx.fillText("完成！",0,0); ctx.restore();
+  // Time
+  ctx.font="bold 52px 'Courier New',monospace";
+  ctx.shadowColor="#fff"; ctx.shadowBlur=22; ctx.fillStyle="#fff";
+  ctx.fillText(fmtTime(finishTime),CANVAS_W/2,CANVAS_H/2+14); ctx.shadowBlur=0;
+  // Record badge
+  if(isRecord){
+    ctx.font="bold 20px sans-serif";
+    ctx.shadowColor="#facc15"; ctx.shadowBlur=16; ctx.fillStyle="#facc15";
+    ctx.fillText("⭐ 個人新紀錄！",CANVAS_W/2,CANVAS_H/2+74); ctx.shadowBlur=0;
+  }
+  ctx.restore();
+}
+
 // ─── Speed streak lines (at very high speed) ─────────────────────
 function drawSpeedStreaks(ctx, x, y, heading, speed, t) {
   const ratio = Math.min(speed / MAX_SPEED, 1);
@@ -402,7 +455,7 @@ function drawMark(ctx, mark, reached, isNext) {
 //   100° max → slightly past abeam toward bow
 //   windSide +1 = wind from port  → boom goes to starboard (positive X, CW)
 //            -1 = wind from starboard → boom goes to port (negative X, CCW)
-function drawBoat(ctx, x, y, heading, sailAngle, windSide, speedRatio) {
+function drawBoat(ctx, x, y, heading, sailAngle, windSide, speedRatio, sailEff=0) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(heading * Math.PI / 180);
@@ -482,16 +535,24 @@ function drawBoat(ctx, x, y, heading, sailAngle, windSide, speedRatio) {
   ctx.fillStyle = `rgba(255,255,255,${sailAlpha})`;
   ctx.fill();
 
-  // Sail line — thicker + brighter at speed
+  // Sail line — thicker + brighter at speed; golden glow when near optimal angle
   const lineW  = 1.8 + speedRatio * 2.2;
   const bright = Math.round(155 + speedRatio * 100);
+  const sweetness = Math.max(0, (sailEff - 0.78) / 0.22); // 0 below 78%, 1 at 100% efficiency
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.quadraticCurveTo(cpX, cpY, tipX, tipY);
   ctx.strokeStyle = `rgb(${bright},${bright},${bright})`;
   ctx.lineWidth = lineW;
   ctx.lineCap = "round";
+  if (sweetness > 0) { ctx.shadowColor = "#facc15"; ctx.shadowBlur = sweetness * 22; }
   ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Golden fill overlay at sweet spot
+  if (sweetness > 0.2) {
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(cpX,cpY,tipX,tipY); ctx.lineTo(0,0);
+    ctx.fillStyle = `rgba(250,204,21,${sweetness * 0.2})`; ctx.fill();
+  }
 
   // Pivot dot
   ctx.beginPath();
@@ -701,12 +762,29 @@ export default function OPSailboatGame() {
   const [speedRatio, setSpeedRatio] = useState(0); // for CSS overlay effects
   const [records, setRecords] = useState(()=>{ try{return JSON.parse(localStorage.getItem("op_records3")||"{}")}catch{return{}} });
   const [playerName, setPlayerName] = useState(()=>localStorage.getItem("op_player_name")||"");
+  const [unlockedUpTo, setUnlockedUpTo] = useState(()=>{
+    try {
+      const stored=localStorage.getItem("op_unlocked");
+      if(stored) return parseInt(stored)||1;
+      // Derive from existing records for returning players
+      const recs=JSON.parse(localStorage.getItem("op_records3")||"{}");
+      const ids=Object.keys(recs).map(k=>parseInt(k.replace("lv",""))).filter(n=>!isNaN(n)&&n>0);
+      if(ids.length>0){ const mx=Math.max(...ids); const u=Math.min(mx+1,LEVELS[LEVELS.length-1].id); localStorage.setItem("op_unlocked",String(u)); return u; }
+      return 1;
+    } catch { return 1; }
+  });
   const [lbData, setLbData] = useState(()=>{ try{return JSON.parse(localStorage.getItem(LB_KEY)||"{}")}catch{return{}} });
   const [showLb, setShowLb] = useState(false);
   const [lbLevel, setLbLevel] = useState(null);
 
   const playerNameRef = useRef(playerName);
   useEffect(()=>{ playerNameRef.current=playerName; },[playerName]);
+
+  const recordsRef = useRef(records);
+  useEffect(()=>{ recordsRef.current=records; },[records]);
+
+  const celebratingRef = useRef(false);
+  const celebrateTimerRef = useRef(null);
 
   const selectedCoach = COACH_LIST[0]; // 固定灰熊教練
   const selectedCoachRef = useRef(COACH_LIST[0]);
@@ -775,6 +853,9 @@ export default function OPSailboatGame() {
 
   const startLevel = useCallback(idx=>{
     unlockAudio();
+    celebratingRef.current=false;
+    if(celebrateTimerRef.current){ clearTimeout(celebrateTimerRef.current); celebrateTimerRef.current=null; }
+    finishParticles.length=0;
     const lv=LEVELS[idx]; const g=gameRef.current;
     // Set theme before setGameState so music starts with correct atmosphere
     currentMusicThemeRef.current = lv.music ?? 0;
@@ -796,8 +877,15 @@ export default function OPSailboatGame() {
     function loop(now){
       const dt=Math.min((now-lastTime)/1000,0.05); lastTime=now;
       const g=gameRef.current; const lv=LEVELS[levelIdx];
-      if(g.finished) return;
+      if(g.finished && !celebratingRef.current) return;
       g.t+=dt*60;
+      if(g.finished){
+        drawOcean(ctx,g.t,g.speed);
+        updateFinishParticles(ctx);
+        drawFinishOverlay(ctx,g.finishTime,g.t,g.isRecord);
+        animRef.current=requestAnimationFrame(loop);
+        return;
+      }
       if(!g.startTime&&g.speed>0.05) g.startTime=now;
       if(g.startTime) g.elapsed=(now-g.startTime)/1000;
 
@@ -844,10 +932,15 @@ export default function OPSailboatGame() {
       if(mark&&Math.hypot(g.x-mark.x,g.y-mark.y)<MARK_RADIUS+BOAT_SIZE+4){
         if(g.currentMark<lv.marks.length-1){ g.currentMark++; setCurrentMark(g.currentMark); showBear("nearMark"); }
         else{
-          g.finished=true; const ft=g.elapsed; setElapsed(ft); setGameState("finished"); showBear("finish");
+          g.finished=true; const ft=g.elapsed; setElapsed(ft); showBear("finish");
           saveLbRecordRef.current(playerNameRef.current, lv.id, ft);
+          const prevRec=recordsRef.current[`lv${lv.id}`];
+          g.isRecord=!prevRec||ft<prevRec; g.finishTime=ft;
           setRecords(prev=>{ const k=`lv${lv.id}`; const u=(!prev[k]||ft<prev[k])?{...prev,[k]:ft}:prev; try{localStorage.setItem("op_records3",JSON.stringify(u))}catch{}; return u; });
-          return;
+          if(levelIdx+1<LEVELS.length){ setUnlockedUpTo(prev=>{ const nxt=Math.max(prev,LEVELS[levelIdx+1].id); try{localStorage.setItem("op_unlocked",String(nxt))}catch{}; return nxt; }); }
+          celebratingRef.current=true; finishParticles.length=0; emitFinishParticles(CANVAS_W/2,CANVAS_H/2,70);
+          if(celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
+          celebrateTimerRef.current=setTimeout(()=>{ celebratingRef.current=false; setGameState("finished"); celebrateTimerRef.current=null; },2200);
         }
       }
 
@@ -895,13 +988,13 @@ export default function OPSailboatGame() {
       lv.marks.forEach((mk,i)=>drawMark(ctx,mk,i<g.currentMark,i===g.currentMark));
 
       // Normal mode: boat at world position with actual heading
-      if (!isHeadUp) drawBoat(ctx,g.x,g.y,g.heading,g.actualSailAngle,windSide,ratio);
+      if (!isHeadUp) drawBoat(ctx,g.x,g.y,g.heading,g.actualSailAngle,windSide,ratio,sailEff);
 
       // End world transform
       if (isHeadUp) ctx.restore();
 
       // Head-up mode: boat always at canvas centre, always facing up
-      if (isHeadUp) drawBoat(ctx,CANVAS_W/2,CANVAS_H/2,0,g.actualSailAngle,windSide,ratio);
+      if (isHeadUp) drawBoat(ctx,CANVAS_W/2,CANVAS_H/2,0,g.actualSailAngle,windSide,ratio,sailEff);
 
       // ── Head-up target arrow (canvas space, drawn after world transform removed) ──
       if (isHeadUp && mark) {
@@ -954,7 +1047,11 @@ export default function OPSailboatGame() {
       animRef.current=requestAnimationFrame(loop);
     }
     animRef.current=requestAnimationFrame(loop);
-    return ()=>cancelAnimationFrame(animRef.current);
+    return ()=>{
+      cancelAnimationFrame(animRef.current);
+      celebratingRef.current=false;
+      if(celebrateTimerRef.current){ clearTimeout(celebrateTimerRef.current); celebrateTimerRef.current=null; }
+    };
   },[gameState,levelIdx,showBear]);
 
   useEffect(()=>{
@@ -992,20 +1089,21 @@ export default function OPSailboatGame() {
         <span style={{fontSize:11,color:"#adf"}}>{coachOn?"ON 🔊":"OFF"}</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,width:"100%",maxWidth:500,marginBottom:14}}>
-        {LEVELS.map((lv,i)=>{ const rec=records[`lv${lv.id}`]; const top=(lbData[`lv${lv.id}`]||[])[0]; return (
+        {LEVELS.map((lv,i)=>{ const rec=records[`lv${lv.id}`]; const top=(lbData[`lv${lv.id}`]||[])[0]; const isLocked=lv.id>unlockedUpTo; return (
           <div key={lv.id} style={{position:"relative"}}>
-            <button onClick={()=>{setLevelIdx(i);startLevel(i);}}
-              style={{width:"100%",background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:12,padding:"12px 8px 10px",cursor:"pointer",color:"#fff",transition:"all 0.18s",textAlign:"center"}}
-              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}
-              onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.09)"}>
-              <div style={{fontSize:20,marginBottom:4}}>{["🌊","💨","⬆️","🔄","🏁","🌀","⚡","🎯"][i]}</div>
+            <button onClick={()=>{ if(!isLocked){setLevelIdx(i);startLevel(i);} }}
+              style={{width:"100%",background:isLocked?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.09)",border:`1px solid ${isLocked?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.18)"}`,borderRadius:12,padding:"12px 8px 10px",cursor:isLocked?"not-allowed":"pointer",color:isLocked?"rgba(255,255,255,0.38)":"#fff",filter:isLocked?"grayscale(0.5)":"none",transition:"all 0.18s",textAlign:"center"}}
+              onMouseEnter={e=>{ if(!isLocked) e.currentTarget.style.background="rgba(255,255,255,0.2)"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background=isLocked?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.09)"; }}>
+              <div style={{fontSize:20,marginBottom:4}}>{isLocked?"🔒":["🌊","💨","⬆️","🔄","🏁","🌀","⚡","🎯"][i]}</div>
               <div style={{fontWeight:700,fontSize:12,marginBottom:2}}>關卡 {lv.id}</div>
-              <div style={{fontSize:11,color:"#7ed6ff",marginBottom:4}}>{lv.name}</div>
-              {rec&&<div style={{fontSize:10,color:"#fbbf24"}}>我的：{fmtTime(rec)}</div>}
-              {top&&<div style={{fontSize:9,color:"#86efac",marginTop:1}}>👑 {top.name} {fmtTime(top.time)}</div>}
+              <div style={{fontSize:11,color:isLocked?"rgba(126,214,255,0.38)":"#7ed6ff",marginBottom:4}}>{lv.name}</div>
+              {!isLocked&&rec&&<div style={{fontSize:10,color:"#fbbf24"}}>我的：{fmtTime(rec)}</div>}
+              {!isLocked&&top&&<div style={{fontSize:9,color:"#86efac",marginTop:1}}>👑 {top.name} {fmtTime(top.time)}</div>}
+              {isLocked&&<div style={{fontSize:9,color:"rgba(255,255,255,0.3)",marginTop:2}}>完成上一關解鎖</div>}
             </button>
-            <button onClick={e=>{e.stopPropagation();setLbLevel(lv.id);setShowLb(true);}}
-              style={{position:"absolute",top:5,right:5,background:"rgba(250,204,21,0.2)",border:"1px solid rgba(250,204,21,0.3)",borderRadius:7,padding:"1px 6px",fontSize:9,color:"#facc15",cursor:"pointer",lineHeight:"16px"}}>榜</button>
+            {!isLocked&&<button onClick={e=>{e.stopPropagation();setLbLevel(lv.id);setShowLb(true);}}
+              style={{position:"absolute",top:5,right:5,background:"rgba(250,204,21,0.2)",border:"1px solid rgba(250,204,21,0.3)",borderRadius:7,padding:"1px 6px",fontSize:9,color:"#facc15",cursor:"pointer",lineHeight:"16px"}}>榜</button>}
           </div>
         );})}
       </div>
@@ -1023,17 +1121,23 @@ export default function OPSailboatGame() {
   if(gameState==="finished"){ const rec=records[`lv${level.id}`];
     const lvLb=lbData[`lv${level.id}`]||[];
     const myRank=lvLb.findIndex(e=>e.name===(playerName||"訪客")&&Math.abs(e.time-elapsed)<0.02);
+    const isNewRecord=rec&&rec>=elapsed;
     return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#062a4a,#0a5a8c)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Noto Sans TC','PingFang TC',sans-serif",color:"#fff",padding:20}}>
-      <div style={{fontSize:68}}>🎉</div>
-      <h2 style={{fontSize:26,fontWeight:900,margin:"6px 0"}}>關卡完成！</h2>
+      <style>{`
+        @keyframes celebrateIn { from{opacity:0;transform:scale(0.7) translateY(-16px)}to{opacity:1;transform:scale(1) translateY(0)} }
+        @keyframes goldPulse { 0%,100%{text-shadow:0 0 12px rgba(250,204,21,0.8)}50%{text-shadow:0 0 32px rgba(250,204,21,1),0 0 60px rgba(250,204,21,0.5)} }
+        @keyframes bounceIn { 0%{transform:scale(0.4)}60%{transform:scale(1.12)}100%{transform:scale(1)} }
+      `}</style>
+      <div style={{fontSize:72,animation:"bounceIn 0.6s ease-out"}}>🎉</div>
+      <h2 style={{fontSize:26,fontWeight:900,margin:"6px 0",animation:"celebrateIn 0.5s ease-out"}}>關卡完成！</h2>
       <p style={{color:"#7ed6ff",margin:"0 0 10px"}}>關卡 {level.id}：{level.name}</p>
-      <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:"14px 36px",textAlign:"center",marginBottom:12}}>
+      <div style={{background:isNewRecord?"rgba(250,204,21,0.15)":"rgba(255,255,255,0.1)",border:isNewRecord?"1px solid rgba(250,204,21,0.4)":"1px solid transparent",borderRadius:16,padding:"14px 36px",textAlign:"center",marginBottom:12,animation:"celebrateIn 0.55s ease-out",boxShadow:isNewRecord?"0 0 30px rgba(250,204,21,0.3)":"none",transition:"box-shadow 0.3s"}}>
         <div style={{fontSize:11,color:"#adf",marginBottom:2}}>完成時間</div>
-        <div style={{fontSize:40,fontWeight:900,fontVariantNumeric:"tabular-nums"}}>{fmtTime(elapsed)}</div>
-        {myRank===0?<div style={{fontSize:13,color:"#facc15",marginTop:3}}>🥇 本關第一名！</div>
+        <div style={{fontSize:40,fontWeight:900,fontVariantNumeric:"tabular-nums",animation:"celebrateIn 0.7s ease-out"}}>{fmtTime(elapsed)}</div>
+        {myRank===0?<div style={{fontSize:13,color:"#facc15",marginTop:3,animation:"goldPulse 1.8s ease-in-out infinite"}}>🥇 本關第一名！</div>
           :myRank>0?<div style={{fontSize:12,color:"#adf",marginTop:3}}>排名第 {myRank+1} 名</div>
-          :rec&&rec>=elapsed?<div style={{fontSize:13,color:"#22c55e",marginTop:3}}>⭐ 個人新紀錄！</div>
+          :isNewRecord?<div style={{fontSize:13,color:"#22c55e",marginTop:3,animation:"goldPulse 1.8s ease-in-out infinite"}}>⭐ 個人新紀錄！</div>
           :rec&&<div style={{fontSize:11,color:"#fbbf24",marginTop:3}}>個人最佳：{fmtTime(rec)}</div>}
       </div>
       {lvLb.length>0&&(
