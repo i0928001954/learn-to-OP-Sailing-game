@@ -151,7 +151,6 @@ function startBgMusic(theme=0) {
   try {
     _bgCtx = new (window.AudioContext || window.webkitAudioContext)();
     const ac = _bgCtx;
-    ac.resume().catch(()=>{});
     // Auto-resume when browser suspends the context (tab blur / power save)
     ac.onstatechange = () => { if (ac.state==='suspended') ac.resume().catch(()=>{}); };
 
@@ -169,7 +168,11 @@ function startBgMusic(theme=0) {
     let ni=0;
     function tick(){
       if(ac!==_bgCtx) return; // context was replaced, this loop is dead
-      if(ac.state==='suspended'){ ac.resume().catch(()=>{}); _bgScheduleId=setTimeout(tick,300); return; }
+      // If still suspended, wait for resume to resolve before scheduling notes
+      if(ac.state==='suspended'){
+        ac.resume().then(()=>{ if(ac===_bgCtx) tick(); }).catch(()=>{});
+        return;
+      }
       const now=ac.currentTime;
       const o=ac.createOscillator(),g=ac.createGain();
       o.type='triangle'; o.frequency.value=t.notes[ni%t.notes.length];
@@ -179,7 +182,10 @@ function startBgMusic(theme=0) {
       o.connect(g); g.connect(master); o.start(now); o.stop(now+t.beat);
       ni++; _bgScheduleId=setTimeout(tick,t.beat*1000);
     }
-    tick();
+    // Wait for the context to actually be running before starting the note loop.
+    // Calling tick() immediately would hit ac.state==='suspended' and fall into a
+    // retry loop that runs outside the user-gesture window, causing silent failure.
+    ac.resume().then(()=>{ if(ac===_bgCtx) tick(); }).catch(()=>{ if(ac===_bgCtx) tick(); });
   } catch(e){ _bgCtx=null; }
 }
 
