@@ -4,10 +4,10 @@ const CANVAS_W = 800;
 const CANVAS_H = 700;
 const BOAT_SIZE = 40;
 const MARK_RADIUS = 35;
-const VERSION = "v2.2";
-const LAST_UPDATED = "2026-05-17";
+const VERSION = "v2.3";
+const LAST_UPDATED = "2026-05-23";
 const MAX_SPEED = 3.0; // knots display max
-const LB_KEY = "op_leaderboard5";
+const LB_KEY = "op_leaderboard6";
 const LB_MAX = 10; // max stored entries per level
 // ── Firebase Realtime Database URL ──────────────────────────────────────────
 // Setup (免費，約5分鐘):
@@ -36,14 +36,74 @@ function optimalSailAngle(a) {
 }
 
 const LEVELS = [
-  { id:1, name:"順風衝刺",    windDir:0,   windSpeed:9,  music:0, marks:[{x:400,y:80,label:"終點"}],                                                startPos:{x:400,y:620}, startHeading:0,   tip:"順風時把帆放開！" },
-  { id:2, name:"側風橫渡",    windDir:270, windSpeed:9,  music:1, marks:[{x:720,y:350,label:"終點"}],                                               startPos:{x:80,y:350},  startHeading:90,  tip:"側風時帆角約45°！" },
-  { id:3, name:"迎風搶風",    windDir:0,   windSpeed:9,  music:2, marks:[{x:400,y:70,label:"上風標"}],                                              startPos:{x:400,y:630}, startHeading:315, tip:"逆風走Z字形（Tacking）！" },
-  { id:4, name:"繞下風標",    windDir:0,   windSpeed:9,  music:0, marks:[{x:400,y:600,label:"下風標"},{x:400,y:90,label:"終點"}],                  startPos:{x:400,y:90},  startHeading:180, tip:"繞過兩個浮標到終點！" },
-  { id:5, name:"三角繞標賽",  windDir:350, windSpeed:10, music:3, marks:[{x:400,y:80,label:"上風標"},{x:680,y:530,label:"側風標"},{x:120,y:530,label:"終點"}], startPos:{x:400,y:630}, startHeading:5, tip:"順序經過三個浮標！" },
-  { id:6, name:"側風蛇行",    windDir:270, windSpeed:11, music:1, marks:[{x:680,y:100,label:"標1"},{x:680,y:580,label:"標2"},{x:400,y:350,label:"終點"}], startPos:{x:80,y:350}, startHeading:0, tip:"帆角45度，側風衝刺！" },
-  { id:7, name:"逆風競技",    windDir:5,   windSpeed:11, music:2, marks:[{x:150,y:350,label:"標A"},{x:650,y:200,label:"標B"},{x:350,y:80,label:"終點"}], startPos:{x:400,y:630}, startHeading:310, tip:"逆風換舷連環技！" },
-  { id:8, name:"全能挑戰",    windDir:0,   windSpeed:12, music:3, marks:[{x:150,y:580,label:"左標"},{x:650,y:580,label:"右標"},{x:400,y:80,label:"終點"}], startPos:{x:400,y:350}, startHeading:180, tip:"逆風、側風、順風全都要！" },
+  // 1: 順風三標 — 3 marks in zigzag downwind course. Teaches adjusting sail angle on runs.
+  { id:1, name:"順風三標",   windDir:0,   windSpeed:9,  music:0,
+    marks:[{x:220,y:440,label:"標1"},{x:600,y:260,label:"標2"},{x:400,y:80,label:"終點"}],
+    startPos:{x:400,y:620}, startHeading:0,
+    tip:"順風帆要放開，走Z字最快！" },
+
+  // 2: 側風U形 — U-shaped crosswind course, right-top → right-bottom → center finish.
+  { id:2, name:"側風U形",    windDir:270, windSpeed:9,  music:1,
+    marks:[{x:720,y:150,label:"右上標"},{x:720,y:540,label:"右下標"},{x:400,y:350,label:"終點"}],
+    startPos:{x:80,y:350}, startHeading:90,
+    tip:"側風帆角45°，U形繞完！" },
+
+  // 3: 迎風換舷 — TRUE upwind (windDir:180 = wind from top). Must tack left-right-center.
+  { id:3, name:"迎風換舷",   windDir:180, windSpeed:9,  music:2,
+    marks:[{x:150,y:420,label:"左換舷"},{x:650,y:220,label:"右換舷"},{x:400,y:70,label:"上風標"}],
+    startPos:{x:400,y:630}, startHeading:315,
+    tip:"Z字搶風！風從上吹下，左右換舷才能爬上去！" },
+
+  // 4: 上下競速 — W-L 2-lap race (windDir:180, upwind north + downwind south, 4 marks).
+  { id:4, name:"上下競速",   windDir:180, windSpeed:10, music:0,
+    marks:[
+      {x:400,y:80, label:"圈1上風標"},
+      {x:220,y:600,label:"圈1下風標"},
+      {x:400,y:80, label:"圈2上風標"},
+      {x:580,y:600,label:"終點"}
+    ],
+    startPos:{x:400,y:640}, startHeading:315,
+    tip:"上下各跑2圈！正式OP比賽的W-L格式！" },
+
+  // 5: 三角賽×2 — Classic triangle course run twice (6 marks total).
+  { id:5, name:"三角賽×2",  windDir:350, windSpeed:10, music:3,
+    marks:[
+      {x:400,y:80, label:"上風標"},  {x:680,y:530,label:"側標"},  {x:120,y:530,label:"底標"},
+      {x:400,y:80, label:"上風標②"},{x:680,y:530,label:"側標②"},{x:120,y:530,label:"終點"}
+    ],
+    startPos:{x:400,y:630}, startHeading:5,
+    tip:"三角賽跑2圈，順序繞過每個標！" },
+
+  // 6: 順風蛇行 — Downwind slalom, 5 gates zigzag left-right going north.
+  { id:6, name:"順風蛇行",   windDir:0,   windSpeed:11, music:1,
+    marks:[
+      {x:150,y:500,label:"閘1"},{x:650,y:370,label:"閘2"},
+      {x:150,y:240,label:"閘3"},{x:650,y:120,label:"閘4"},
+      {x:400,y:80, label:"終點"}
+    ],
+    startPos:{x:400,y:630}, startHeading:0,
+    tip:"順風蛇行！左右交替穿閘，帆角隨時調！" },
+
+  // 7: 逆風錦標 — 5-mark upwind tactical race, find optimal tacking angles.
+  { id:7, name:"逆風錦標",   windDir:5,   windSpeed:11, music:2,
+    marks:[
+      {x:200,y:430,label:"標A"},{x:620,y:280,label:"標B"},
+      {x:150,y:130,label:"標C"},{x:620,y:130,label:"標D"},
+      {x:380,y:70, label:"終點"}
+    ],
+    startPos:{x:400,y:630}, startHeading:310,
+    tip:"5標逆風錦標！找到最佳換舷時機！" },
+
+  // 8: 全能冠軍賽 — 7-mark Olympic course: reach → crosswind → downwind → upwind(tack!) → finish.
+  { id:8, name:"全能冠軍賽", windDir:0,   windSpeed:12, music:3,
+    marks:[
+      {x:100,y:480,label:"左標"},  {x:700,y:480,label:"右標"},
+      {x:700,y:180,label:"右上標"},{x:100,y:180,label:"左上標"},
+      {x:400,y:80, label:"頂標"},  {x:400,y:520,label:"底標"},
+      {x:400,y:350,label:"終點"}
+    ],
+    startPos:{x:400,y:620}, startHeading:240,
+    tip:"7標全能冠軍賽！順風側風逆風一次全考！" },
 ];
 
 const COACH_LIST = [
@@ -766,14 +826,14 @@ export default function OPSailboatGame() {
   const [sailAngleDisplay, setSailAngleDisplay] = useState(45);
   const [speedDisplay, setSpeedDisplay] = useState(0);
   const [speedRatio, setSpeedRatio] = useState(0); // for CSS overlay effects
-  const [records, setRecords] = useState(()=>{ try{return JSON.parse(localStorage.getItem("op_records3")||"{}")}catch{return{}} });
+  const [records, setRecords] = useState(()=>{ try{return JSON.parse(localStorage.getItem("op_records4")||"{}")}catch{return{}} });
   const [playerName, setPlayerName] = useState(()=>localStorage.getItem("op_player_name")||"");
   const [unlockedUpTo, setUnlockedUpTo] = useState(()=>{
     try {
       const stored=localStorage.getItem("op_unlocked");
       if(stored) return parseInt(stored)||1;
       // Derive from existing records for returning players
-      const recs=JSON.parse(localStorage.getItem("op_records3")||"{}");
+      const recs=JSON.parse(localStorage.getItem("op_records4")||"{}");
       const ids=Object.keys(recs).map(k=>parseInt(k.replace("lv",""))).filter(n=>!isNaN(n)&&n>0);
       if(ids.length>0){ const mx=Math.max(...ids); const u=Math.min(mx+1,LEVELS[LEVELS.length-1].id); localStorage.setItem("op_unlocked",String(u)); return u; }
       return 1;
@@ -942,7 +1002,7 @@ export default function OPSailboatGame() {
           saveLbRecordRef.current(playerNameRef.current, lv.id, ft);
           const prevRec=recordsRef.current[`lv${lv.id}`];
           g.isRecord=!prevRec||ft<prevRec; g.finishTime=ft;
-          setRecords(prev=>{ const k=`lv${lv.id}`; const u=(!prev[k]||ft<prev[k])?{...prev,[k]:ft}:prev; try{localStorage.setItem("op_records3",JSON.stringify(u))}catch{}; return u; });
+          setRecords(prev=>{ const k=`lv${lv.id}`; const u=(!prev[k]||ft<prev[k])?{...prev,[k]:ft}:prev; try{localStorage.setItem("op_records4",JSON.stringify(u))}catch{}; return u; });
           if(levelIdx+1<LEVELS.length){ setUnlockedUpTo(prev=>{ const nxt=Math.max(prev,LEVELS[levelIdx+1].id); try{localStorage.setItem("op_unlocked",String(nxt))}catch{}; return nxt; }); }
           celebratingRef.current=true; finishParticles.length=0; emitFinishParticles(CANVAS_W/2,CANVAS_H/2,70);
           if(celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
@@ -1101,7 +1161,7 @@ export default function OPSailboatGame() {
               style={{width:"100%",background:isLocked?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.09)",border:`1px solid ${isLocked?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.18)"}`,borderRadius:12,padding:"12px 8px 10px",cursor:isLocked?"not-allowed":"pointer",color:isLocked?"rgba(255,255,255,0.38)":"#fff",filter:isLocked?"grayscale(0.5)":"none",transition:"all 0.18s",textAlign:"center"}}
               onMouseEnter={e=>{ if(!isLocked) e.currentTarget.style.background="rgba(255,255,255,0.2)"; }}
               onMouseLeave={e=>{ e.currentTarget.style.background=isLocked?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.09)"; }}>
-              <div style={{fontSize:20,marginBottom:4}}>{isLocked?"🔒":["🌊","💨","⬆️","🔄","🏁","🌀","⚡","🎯"][i]}</div>
+              <div style={{fontSize:20,marginBottom:4}}>{isLocked?"🔒":["🌊","🔀","⬆️","🏹","🔺","🐍","🏆","👑"][i]}</div>
               <div style={{fontWeight:700,fontSize:12,marginBottom:2}}>關卡 {lv.id}</div>
               <div style={{fontSize:11,color:isLocked?"rgba(126,214,255,0.38)":"#7ed6ff",marginBottom:4}}>{lv.name}</div>
               {!isLocked&&rec&&<div style={{fontSize:10,color:"#fbbf24"}}>我的：{fmtTime(rec)}</div>}
